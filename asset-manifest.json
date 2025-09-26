@@ -1,0 +1,21 @@
+{
+  "files": {
+    "main.css": "/siteplan/static/css/main.b0143512.css",
+    "main.js": "/siteplan/static/js/main.4b69dc40.js",
+    "static/js/239.a3cf9850.chunk.js": "/siteplan/static/js/239.a3cf9850.chunk.js",
+    "static/js/977.23eaf12b.chunk.js": "/siteplan/static/js/977.23eaf12b.chunk.js",
+    "static/js/455.eea8b6f7.chunk.js": "/siteplan/static/js/455.eea8b6f7.chunk.js",
+    "static/js/453.255dc8d6.chunk.js": "/siteplan/static/js/453.255dc8d6.chunk.js",
+    "index.html": "/siteplan/index.html",
+    "main.b0143512.css.map": "/siteplan/static/css/main.b0143512.css.map",
+    "main.4b69dc40.js.map": "/siteplan/static/js/main.4b69dc40.js.map",
+    "239.a3cf9850.chunk.js.map": "/siteplan/static/js/239.a3cf9850.chunk.js.map",
+    "977.23eaf12b.chunk.js.map": "/siteplan/static/js/977.23eaf12b.chunk.js.map",
+    "455.eea8b6f7.chunk.js.map": "/siteplan/static/js/455.eea8b6f7.chunk.js.map",
+    "453.255dc8d6.chunk.js.map": "/siteplan/static/js/453.255dc8d6.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.b0143512.css",
+    "static/js/main.4b69dc40.js"
+  ]
+}
