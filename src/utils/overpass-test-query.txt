@@ -1,0 +1,2 @@
+[out:json][timeout:25];way["natural"="water"](52.515,13.375,52.525,13.405);out body;>;
+out skel qt;
