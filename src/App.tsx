@@ -35,7 +35,7 @@ const App: React.FC = () => {
   const [osmData, setOsmData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Remove fetchPaused, use explicit fetch trigger
+  // Remove fetchPaused, use explicit fetch triggers
   const [fetchRequested, setFetchRequested] = useState(false);
 
   // Only fetch OSM data when user clicks fetch button
