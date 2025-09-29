@@ -82,7 +82,13 @@ const App: React.FC = () => {
   }
 
   // Paper sizes in mm
-  const PAPER_SIZES: Record<string, [number, number]> = { A4: [210, 297], A3: [297, 420] };
+  const PAPER_SIZES: Record<string, [number, number]> = {
+    A4: [210, 297],
+    A3: [297, 420],
+    A2: [420, 594],
+    A1: [594, 841],
+    A0: [841, 1189],
+  };
 
   // When export options change, update bbox to preset size
   useEffect(() => {

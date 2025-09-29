@@ -67,6 +67,9 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, exportOptions, onEx
           >
             <option value="A4">A4</option>
             <option value="A3">A3</option>
+            <option value="A2">A2</option>
+            <option value="A1">A1</option>
+            <option value="A0">A0</option>
           </select>
         </label>
         <label style={{ fontSize: 14, color: '#333', fontWeight: 500, marginBottom: 2 }}>
