@@ -26,7 +26,7 @@ function bboxSizeMeters([minLon, minLat, maxLon, maxLat]: [number, number, numbe
 
 const DEFAULT_BBOX: [number, number, number, number] = [13.375, 52.515, 13.405, 52.525]; // Berlin example
 const DEFAULT_STYLES = [
-  { name: 'Default Style', url: 'https://tiles.stadiamaps.com/styles/osm_bright.json' },
+  { name: 'OSM Default', url: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json' },
 ];
 
 const App: React.FC = () => {
