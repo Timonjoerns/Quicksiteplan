@@ -3,7 +3,7 @@
 
 // ...existing imports...
 
-import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, forwardRef, useImperativeHandle, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -27,6 +27,7 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
   ({ styleUrl, bbox, onBboxChange, osmData, selectedTypes = ['water', 'streets', 'buildings'] }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
+    const [mapInitialized, setMapInitialized] = useState(false);
 
     // Draw a center marker for the map frame, update on move/zoom
     useEffect(() => {
@@ -77,8 +78,6 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       };
     }, []);
 
-  useImperativeHandle(ref, () => mapRef.current ?? undefined, []);
-
   // Draw control ref
   // const drawRef = useRef<MapboxDraw | null>(null);
 
@@ -92,12 +91,18 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
         bounds: bbox,
         fitBoundsOptions: { padding: 20 },
       });
+      setMapInitialized(true);
     }
     return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        setMapInitialized(false);
+      }
     };
   }, [styleUrl]);
+
+  useImperativeHandle(ref, () => mapInitialized ? mapRef.current || undefined : undefined, [mapInitialized]);
 
   // Add/update bbox layer whenever bbox changes, but only after style is loaded
   useEffect(() => {
