@@ -4,24 +4,23 @@ import { DownloadIcon, CenterIcon } from './components/Icons';
 import './App.css';
 import MapView from './components/MapView';
 import React, { useRef, useState, useEffect } from 'react';
-import DataSelector, { OSMFeatureType } from './components/DataSelector';
-import ExportPanel from './components/ExportPanel';
+import { OSMFeatureType } from './components/DataSelector';
 import { fetchOsmData } from './utils/overpass';
 import jsPDF from 'jspdf';
 import proj4 from 'proj4';
 
 // Helper: Calculate bbox size in meters (approx, using haversine for width/height)
-function bboxSizeMeters([minLon, minLat, maxLon, maxLat]: [number, number, number, number]) {
-  const R = 6371000;
-  const toRad = (d: number) => d * Math.PI / 180;
-  // width: distance at center latitude
-  const lat = (minLat + maxLat) / 2;
-  const dLon = toRad(maxLon - minLon);
-  const dLat = toRad(maxLat - minLat);
-  const width = R * dLon * Math.cos(toRad(lat));
-  const height = R * dLat;
-  return { width: Math.abs(width), height: Math.abs(height) };
-}
+// function bboxSizeMeters([minLon, minLat, maxLon, maxLat]: [number, number, number, number]) {
+//   const R = 6371000;
+//   const toRad = (d: number) => d * Math.PI / 180;
+//   // width: distance at center latitude
+//   const lat = (minLat + maxLat) / 2;
+//   const dLon = toRad(maxLon - minLon);
+//   const dLat = toRad(maxLat - minLat);
+//   const width = R * dLon * Math.cos(toRad(lat));
+//   const height = R * dLat;
+//   return { width: Math.abs(width), height: Math.abs(height) };
+// }
 
 
 const DEFAULT_BBOX: [number, number, number, number] = [13.375, 52.515, 13.405, 52.525]; // Berlin example
@@ -93,7 +92,7 @@ const App: React.FC = () => {
   // When export options change, update bbox to preset size
   useEffect(() => {
     setPresetBbox(exportOptions);
-  }, [exportOptions.paperSize, exportOptions.orientation, exportOptions.scale]);
+  }, [exportOptions]);
 
   // Check if bbox fits at current scale using Web Mercator projection (matches export logic)
   // Removed bbox fit check effect
@@ -151,8 +150,8 @@ const App: React.FC = () => {
       // Calculate page size in meters at requested scale
       let [wmm, hmm] = PAPER_SIZES[options.paperSize] || [210, 297];
       if (options.orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
-      const wMeters = wmm / 1000 * options.scale;
-      const hMeters = hmm / 1000 * options.scale;
+      // const wMeters = wmm / 1000 * options.scale;
+      // const hMeters = hmm / 1000 * options.scale;
       // Center crop: determine visible bbox in Mercator
       // Use the projected bbox as the export area (no cropping)
       const cropMinX = minX, cropMaxX = maxX, cropMinY = minY, cropMaxY = maxY;

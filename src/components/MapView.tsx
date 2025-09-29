@@ -1,5 +1,6 @@
 
 
+
 // ...existing imports...
 
 import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
@@ -7,7 +8,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 // @ts-ignore
-import DrawRectangle from 'mapbox-gl-draw-rectangle-mode';
+// import DrawRectangle from 'mapbox-gl-draw-rectangle-mode';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 
 
@@ -76,10 +77,10 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       };
     }, []);
 
-  useImperativeHandle(ref, () => mapRef.current ?? undefined, [mapRef.current]);
+  useImperativeHandle(ref, () => mapRef.current ?? undefined, []);
 
   // Draw control ref
-  const drawRef = useRef<MapboxDraw | null>(null);
+  // const drawRef = useRef<MapboxDraw | null>(null);
 
 
   // Initialize map
