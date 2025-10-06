@@ -30,7 +30,7 @@ const DEFAULT_STYLES = [
 
 const App: React.FC = () => {
   const [bbox, setBbox] = useState<[number, number, number, number]>(DEFAULT_BBOX);
-  const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(['water', 'streets']);
+  const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(['water', 'streets', 'buildings', 'trees', 'greenery']);
   const [osmData, setOsmData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,12 +114,37 @@ const App: React.FC = () => {
       }
       const features: GeoJSON.Feature[] = [];
       for (const el of osmData.elements) {
+        // Handle standalone nodes (like trees)
+        if (el.type === 'node' && el.tags && Object.keys(el.tags).length > 0) {
+          features.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
+            properties: el.tags || {},
+          });
+        }
+        // Handle ways
         if (el.type === 'way' && el.nodes) {
           const coords = el.nodes.map((nid: string) => nodes[nid]).filter(Boolean);
           if (coords.length > 1) {
+            // Check if it's a closed way (polygon) - for greenery areas
+            const isClosed = el.nodes[0] === el.nodes[el.nodes.length - 1];
+            const isArea = isClosed && (
+              el.tags?.landuse || 
+              el.tags?.leisure === 'park' || 
+              el.tags?.leisure === 'garden' || 
+              el.tags?.leisure === 'nature_reserve' ||
+              el.tags?.natural === 'wood' ||
+              el.tags?.natural === 'scrub' ||
+              el.tags?.natural === 'grassland' ||
+              el.tags?.natural === 'heath'
+            );
+            
             features.push({
               type: 'Feature',
-              geometry: { type: 'LineString', coordinates: coords },
+              geometry: { 
+                type: isArea ? 'Polygon' : 'LineString', 
+                coordinates: isArea ? [coords] : coords 
+              },
               properties: el.tags || {},
             });
           }
@@ -144,9 +169,12 @@ const App: React.FC = () => {
       ];
       const bboxMerc = bboxCorners.map(projectToMerc);
       // Find Mercator bbox min/max
-      const xs = bboxMerc.map(([x, _]) => x);
-      const ys = bboxMerc.map(([_, y]) => y);
-      const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+      const xs = bboxMerc.map((coord) => coord[0]);
+      const ys = bboxMerc.map((coord) => coord[1]);
+      const minX = Math.min.apply(null, xs);
+      const maxX = Math.max.apply(null, xs);
+      const minY = Math.min.apply(null, ys);
+      const maxY = Math.max.apply(null, ys);
       // Calculate page size in meters at requested scale
       let [wmm, hmm] = PAPER_SIZES[options.paperSize] || [210, 297];
       if (options.orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
@@ -169,10 +197,15 @@ const App: React.FC = () => {
       const water = features.filter(f => selectedTypes.includes('water') && (f.properties && (f.properties.waterway || f.properties.natural === 'water')));
       const streets = features.filter(f => selectedTypes.includes('streets') && (f.properties && f.properties.highway));
       const buildings = features.filter(f => selectedTypes.includes('buildings') && (f.properties && f.properties.building));
+      const trees = features.filter(f => selectedTypes.includes('trees') && (f.properties && f.properties.natural === 'tree'));
+      const greenery = features.filter(f => selectedTypes.includes('greenery') && (f.properties && (f.properties.landuse === 'forest' || f.properties.landuse === 'grass' || f.properties.landuse === 'meadow' || f.properties.landuse === 'orchard' || f.properties.landuse === 'vineyard' || f.properties.landuse === 'farmland' || f.properties.landuse === 'allotments' || f.properties.leisure === 'park' || f.properties.leisure === 'garden' || f.properties.leisure === 'nature_reserve' || f.properties.natural === 'wood' || f.properties.natural === 'scrub' || f.properties.natural === 'grassland' || f.properties.natural === 'heath')));
       // Draw each category in its color
-      const drawCategory = (cat: GeoJSON.Feature[], color: [number, number, number]) => {
+      const drawCategory = (cat: GeoJSON.Feature[], color: [number, number, number], fill = false, fillOpacity = 0.3) => {
         doc.setDrawColor(...color);
         doc.setLineWidth(0.7);
+        if (fill) {
+          doc.setFillColor(color[0], color[1], color[2]);
+        }
         cat.forEach(f => {
           if (f.geometry.type === 'LineString') {
             const coords = f.geometry.coordinates as [number, number][];
@@ -190,12 +223,66 @@ const App: React.FC = () => {
               });
               if (started) doc.stroke();
             }
+          } else if (f.geometry.type === 'Polygon') {
+            const rings = f.geometry.coordinates as [number, number][][];
+            const outerRing = rings[0];
+            const projected = outerRing.map(project);
+            if (projected.length > 2 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
+              const validPoints = projected.filter(([x, y]) => !isNaN(x) && !isNaN(y));
+              if (validPoints.length > 2) {
+                // Draw filled polygon
+                if (fill) {
+                  doc.setFillColor(color[0], color[1], color[2]);
+                  // Draw polygon path
+                  validPoints.forEach(([x, y], i) => {
+                    if (i === 0) doc.moveTo(x, y);
+                    else doc.lineTo(x, y);
+                  });
+                  // Close and fill
+                  doc.lineTo(validPoints[0][0], validPoints[0][1]);
+                  doc.fill();
+                  // Draw outline
+                  doc.setDrawColor(...color);
+                  validPoints.forEach(([x, y], i) => {
+                    if (i === 0) doc.moveTo(x, y);
+                    else doc.lineTo(x, y);
+                  });
+                  doc.lineTo(validPoints[0][0], validPoints[0][1]);
+                  doc.stroke();
+                } else {
+                  // Draw outline only
+                  validPoints.forEach(([x, y], i) => {
+                    if (i === 0) doc.moveTo(x, y);
+                    else doc.lineTo(x, y);
+                  });
+                  doc.lineTo(validPoints[0][0], validPoints[0][1]);
+                  doc.stroke();
+                }
+              }
+            }
           }
         });
       };
+      // Draw trees as small circles
+      const drawTrees = (treeFeatures: GeoJSON.Feature[], color: [number, number, number]) => {
+        doc.setDrawColor(...color);
+        doc.setFillColor(color[0], color[1], color[2]);
+        treeFeatures.forEach(f => {
+          if (f.geometry.type === 'Point') {
+            const coords = f.geometry.coordinates as [number, number];
+            const [px, py] = project(coords);
+            if (!isNaN(px) && !isNaN(py)) {
+              doc.circle(px, py, 0.8, 'F'); // Small filled circle for tree
+            }
+          }
+        });
+      };
+      // Draw in correct order: greenery (fill), water, streets, buildings, trees
+      drawCategory(greenery, [144, 238, 144], true); // light green with fill
       drawCategory(water, [51, 153, 255]); // blue
       drawCategory(streets, [255, 102, 0]); // orange
       drawCategory(buildings, [136, 136, 136]); // gray
+      drawTrees(trees, [34, 139, 34]); // forest green
       // --- Draw scale bar ---
       // Choose a nice round scale bar length (in meters)
       const scaleBarLengths = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
