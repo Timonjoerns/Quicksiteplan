@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../i18n/I18nContext';
 
 export type OSMFeatureType =
   | 'water'
@@ -13,16 +14,18 @@ interface DataSelectorProps {
   onChange: (selected: OSMFeatureType[]) => void;
 }
 
-const options: { label: string; value: OSMFeatureType }[] = [
-  { label: 'Water Bodies', value: 'water' },
-  { label: 'Streets', value: 'streets' },
-  { label: 'Buildings', value: 'buildings' },
-  { label: 'Railways', value: 'railways' },
-  { label: 'Trees (Points)', value: 'trees' },
-  { label: 'Green Areas', value: 'greenery' },
-];
-
 const DataSelector: React.FC<DataSelectorProps> = ({ selected, onChange }) => {
+  const { t } = useI18n();
+
+  const options: { label: string; value: OSMFeatureType }[] = [
+    { label: t('layerWater'), value: 'water' },
+    { label: t('layerStreets'), value: 'streets' },
+    { label: t('layerBuildings'), value: 'buildings' },
+    { label: t('layerRailways'), value: 'railways' },
+    { label: t('layerTrees'), value: 'trees' },
+    { label: t('layerGreenery'), value: 'greenery' },
+  ];
+
   const handleChange = (value: OSMFeatureType) => {
     if (selected.includes(value)) {
       onChange(selected.filter((v) => v !== value));
@@ -31,18 +34,20 @@ const DataSelector: React.FC<DataSelectorProps> = ({ selected, onChange }) => {
     }
   };
   return (
-    <div>
-      <h3>Select OSM Data Types</h3>
+    <div className="qsp-field-list">
       {options.map((opt) => (
-        <label key={opt.value} style={{ display: 'block' }}>
+        <label key={opt.value} className="qsp-checkbox-row">
           <input
             type="checkbox"
             checked={selected.includes(opt.value)}
             onChange={() => handleChange(opt.value)}
           />
-          {opt.label}
+          <span>{opt.label}</span>
         </label>
       ))}
+      <div className="qsp-selector-count">
+        {t('layersSelected', { count: selected.length, total: options.length })}
+      </div>
     </div>
   );
 };

@@ -1,10 +1,29 @@
+:root {
+  --qsp-paper: #e3e3de;
+  --qsp-ink: #1a1a1a;
+  --qsp-ink-70: rgba(26, 26, 26, 0.7);
+  --qsp-ink-45: rgba(26, 26, 26, 0.45);
+  --qsp-ink-18: rgba(26, 26, 26, 0.18);
+  --qsp-ink-08: rgba(26, 26, 26, 0.08);
+  --qsp-font: 'Space Grotesk', 'Space Grotesk Fallback', ui-sans-serif, system-ui, sans-serif;
+  --qsp-border: 1px solid var(--qsp-ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background: var(--qsp-paper);
+  color: var(--qsp-ink);
+  font-family: var(--qsp-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select {
+  font-family: inherit;
 }
 
 code {

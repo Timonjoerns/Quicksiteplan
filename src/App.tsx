@@ -1,41 +1,20 @@
 import SidebarCollapsible from './components/SidebarCollapsible';
-import { DownloadIcon, CenterIcon } from './components/Icons';
+import { CenterIcon } from './components/Icons';
 
 import './App.css';
 import MapView from './components/MapView';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { OSMFeatureType } from './components/DataSelector';
 import { fetchOsmData } from './utils/overpass';
+import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
+import { I18nProvider, useI18n } from './i18n/I18nContext';
 import jsPDF from 'jspdf';
 import proj4 from 'proj4';
-
-// Helper: Calculate bbox size in meters (approx, using haversine for width/height)
-// function bboxSizeMeters([minLon, minLat, maxLon, maxLat]: [number, number, number, number]) {
-//   const R = 6371000;
-//   const toRad = (d: number) => d * Math.PI / 180;
-//   // width: distance at center latitude
-//   const lat = (minLat + maxLat) / 2;
-//   const dLon = toRad(maxLon - minLon);
-//   const dLat = toRad(maxLat - minLat);
-//   const width = R * dLon * Math.cos(toRad(lat));
-//   const height = R * dLat;
-//   return { width: Math.abs(width), height: Math.abs(height) };
-// }
-
 
 const DEFAULT_BBOX: [number, number, number, number] = [13.375, 52.515, 13.405, 52.525]; // Berlin example
 const DEFAULT_STYLES = [
   { name: 'OSM Default', url: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json' },
 ];
-
-// Paper sizes in mm
-const PAPER_SIZES: Record<string, [number, number]> = {
-  A4: [210, 297],
-  A3: [297, 420],
-  A2: [420, 594],
-  A1: [594, 841],
-  A0: [841, 1189],
-};
 
 // Above this, an Overpass query risks timing out and the browser risks
 // choking on rendering/exporting too many features.
@@ -50,13 +29,13 @@ function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, 
   return widthKm * heightKm;
 }
 
-const App: React.FC = () => {
+const AppInner: React.FC = () => {
+  const { t } = useI18n();
   const [bbox, setBbox] = useState<[number, number, number, number]>(DEFAULT_BBOX);
   const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(['water', 'streets', 'buildings', 'trees', 'greenery']);
   const [osmData, setOsmData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Remove fetchPaused, use explicit fetch triggers
   const [fetchRequested, setFetchRequested] = useState(false);
 
   // Only fetch OSM data when user clicks fetch button
@@ -64,33 +43,28 @@ const App: React.FC = () => {
     if (!fetchRequested) return;
     setFetchRequested(false);
     if (bboxAreaKm2(bbox) > MAX_BBOX_AREA_KM2) {
-      setError(`Export area is too large (max ${MAX_BBOX_AREA_KM2} km²). Zoom in or reduce the scale.`);
+      setError(t('errorAreaTooLarge', { max: MAX_BBOX_AREA_KM2 }));
       return;
     }
     setLoading(true);
     setError(null);
     fetchOsmData(bbox, selectedTypes)
       .then(data => setOsmData(data))
-      .catch(() => setError('Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.'))
+      .catch(() => setError(t('errorFetchFailed')))
       .finally(() => setLoading(false));
-  }, [fetchRequested, bbox, selectedTypes]);
-
-  // Removed style upload logic
+  }, [fetchRequested, bbox, selectedTypes, t]);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Export fit check state
-  const [exportOptions, setExportOptions] = useState<{ scale: number; paperSize: string; orientation: string }>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
-  // Removed bboxFits state, no longer needed
+  const [exportOptions, setExportOptions] = useState<ExportOptions>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
 
   // Helper: set bbox to match paper size/orientation/scale, centered on current bbox center.
   // Uses the functional setState form (reads previous bbox via its callback,
   // not the component's `bbox` closure) so this has a stable identity and
   // can be a safe, complete useEffect dependency without re-triggering itself.
-  const setPresetBbox = useCallback(({ scale, paperSize, orientation }: { scale: number; paperSize: string; orientation: string }) => {
-    let [wmm, hmm] = PAPER_SIZES[paperSize] || [210, 297];
-    if (orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
-    const safeScale = scale > 0 ? scale : 1;
+  const setPresetBbox = useCallback((opts: ExportOptions) => {
+    const [wmm, hmm] = getPaperDimsMm(opts);
+    const safeScale = opts.scale > 0 ? opts.scale : 1;
     const wMeters = wmm / 1000 * safeScale;
     const hMeters = hmm / 1000 * safeScale;
     setBbox(([minLon, minLat, maxLon, maxLat]) => {
@@ -115,14 +89,19 @@ const App: React.FC = () => {
     setPresetBbox(exportOptions);
   }, [exportOptions, setPresetBbox]);
 
-  // Check if bbox fits at current scale using Web Mercator projection (matches export logic)
-  // Removed bbox fit check effect
+  // Called by MapView when a corner-drag resize ends: syncs the dragged
+  // frame size back into scale/paper-size state (snapped DIN size, or a
+  // Custom size when it didn't land near one).
+  const handleResizeCommit = useCallback((patch: { paperSize: string; orientation: 'portrait' | 'landscape'; customWidthMm?: number; customHeightMm?: number }) => {
+    setExportOptions(prev => ({ ...prev, ...patch }));
+  }, []);
 
-  const handleExport = async (options: { scale: number; paperSize: string; orientation: string }) => {
-    // Do not setExportOptions here; exportOptions and bbox are always in sync
+  const handleExport = async (options: ExportOptions) => {
+    const [wmm, hmm] = getPaperDimsMm(options);
     const doc = new jsPDF({
-      orientation: options.orientation as 'portrait' | 'landscape',
-      format: options.paperSize.toLowerCase() as 'a3' | 'a4',
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [wmm, hmm],
     });
     // Draw OSM features as vector lines, using UTM projection for true metric scaling
     if (osmData && osmData.elements) {
@@ -150,21 +129,21 @@ const App: React.FC = () => {
             // Check if it's a closed way (polygon) - for greenery areas
             const isClosed = el.nodes[0] === el.nodes[el.nodes.length - 1];
             const isArea = isClosed && (
-              el.tags?.landuse || 
-              el.tags?.leisure === 'park' || 
-              el.tags?.leisure === 'garden' || 
+              el.tags?.landuse ||
+              el.tags?.leisure === 'park' ||
+              el.tags?.leisure === 'garden' ||
               el.tags?.leisure === 'nature_reserve' ||
               el.tags?.natural === 'wood' ||
               el.tags?.natural === 'scrub' ||
               el.tags?.natural === 'grassland' ||
               el.tags?.natural === 'heath'
             );
-            
+
             features.push({
               type: 'Feature',
-              geometry: { 
-                type: isArea ? 'Polygon' : 'LineString', 
-                coordinates: isArea ? [coords] : coords 
+              geometry: {
+                type: isArea ? 'Polygon' : 'LineString',
+                coordinates: isArea ? [coords] : coords
               },
               properties: el.tags || {},
             });
@@ -196,11 +175,6 @@ const App: React.FC = () => {
       const maxX = Math.max.apply(null, xs);
       const minY = Math.min.apply(null, ys);
       const maxY = Math.max.apply(null, ys);
-      // Calculate page size in meters at requested scale
-      let [wmm, hmm] = PAPER_SIZES[options.paperSize] || [210, 297];
-      if (options.orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
-      // const wMeters = wmm / 1000 * options.scale;
-      // const hMeters = hmm / 1000 * options.scale;
       // Center crop: determine visible bbox in Mercator
       // Use the projected bbox as the export area (no cropping)
       const cropMinX = minX, cropMaxX = maxX, cropMinY = minY, cropMaxY = maxY;
@@ -319,7 +293,7 @@ const App: React.FC = () => {
       // Draw scale bar at bottom left
       const barX = margin + 12;
       const barY = pageH - margin - 24;
-      doc.setDrawColor(0, 0, 0);
+      doc.setDrawColor(26, 26, 26);
       doc.setLineWidth(1);
       doc.line(barX, barY, barX + scaleBarPx, barY);
       doc.line(barX, barY - 3, barX, barY + 3);
@@ -333,7 +307,7 @@ const App: React.FC = () => {
       const arrowY = margin + 32;
       const arrowLen = 18;
       // Arrow shaft
-      doc.setDrawColor(0, 0, 0);
+      doc.setDrawColor(26, 26, 26);
       doc.setLineWidth(1.2);
       doc.line(arrowX, arrowY, arrowX, arrowY - arrowLen);
       // Arrow head
@@ -346,77 +320,69 @@ const App: React.FC = () => {
     doc.save('siteplan-export.pdf');
   };
 
+  const currentAreaKm2 = bboxAreaKm2(bbox);
+
   return (
-    <div style={{ position: 'relative', height: '100vh', width: '100vw', fontFamily: 'Inter, Helvetica Neue, Arial, sans-serif', background: '#f4f6fa', overflow: 'hidden' }}>
-      {/* Map as background layer */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
-        <MapView ref={mapRef} styleUrl={DEFAULT_STYLES[0].url} bbox={bbox} onBboxChange={setBbox} osmData={osmData} selectedTypes={selectedTypes} />
+    <div className="qsp-app">
+      <div className="qsp-map-layer">
+        <MapView
+          ref={mapRef}
+          styleUrl={DEFAULT_STYLES[0].url}
+          bbox={bbox}
+          onBboxChange={setBbox}
+          osmData={osmData}
+          selectedTypes={selectedTypes}
+          scale={exportOptions.scale}
+          onResizeCommit={handleResizeCommit}
+        />
       </div>
-      {/* Floating Sidebar */}
-      {/* Collapsible Sidebar */}
+
       <SidebarCollapsible
         loading={loading}
         error={error}
+        hasData={!!osmData}
+        bboxAreaKm2={currentAreaKm2}
+        maxBboxAreaKm2={MAX_BBOX_AREA_KM2}
         selectedTypes={selectedTypes}
         setSelectedTypes={setSelectedTypes}
         exportOptions={exportOptions}
         setExportOptions={setExportOptions}
         handleExport={handleExport}
+        onFetch={() => setFetchRequested(true)}
       />
-      {/* Floating Action Buttons - Swiss style glassmorphism */}
-      <div style={{ position: 'absolute', bottom: 40, right: 40, display: 'flex', flexDirection: 'column', gap: 28, zIndex: 30 }}>
-          <button
-            onClick={() => setFetchRequested(true)}
-            title="Fetch OSM Data"
-            style={{
-              width: 64, height: 64, borderRadius: 32, border: '1.5px solid rgba(255,255,255,0.5)',
-              background: 'rgba(255,255,255,0.35)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-              backdropFilter: 'blur(18px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#1976d2', cursor: 'pointer', transition: 'box-shadow 0.2s, background 0.2s',
-              WebkitBackdropFilter: 'blur(18px)',
-              outline: 'none',
-            }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.55)'}
-            onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
-          >
-            <DownloadIcon size={32} />
-          </button>
-          <button
-            onClick={() => {
-              if (mapRef.current) {
-                const center = mapRef.current.getCenter();
-                const [minLon, minLat, maxLon, maxLat] = bbox;
-                const dLon = (maxLon - minLon) / 2;
-                const dLat = (maxLat - minLat) / 2;
-                setBbox([
-                  center.lng - dLon,
-                  center.lat - dLat,
-                  center.lng + dLon,
-                  center.lat + dLat,
-                ]);
-              }
-            }}
-            title="Center BBox Here"
-            style={{
-              width: 64, height: 64, borderRadius: 32, border: '1.5px solid rgba(255,255,255,0.5)',
-              background: 'rgba(255,255,255,0.35)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-              backdropFilter: 'blur(18px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#1976d2', cursor: 'pointer', transition: 'box-shadow 0.2s, background 0.2s',
-              WebkitBackdropFilter: 'blur(18px)',
-              outline: 'none',
-            }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.55)'}
-            onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
-          >
-            <CenterIcon size={32} />
-          </button>
+
+      <div className="qsp-toolbar">
+        <button
+          type="button"
+          className="qsp-toolbar-btn"
+          onClick={() => {
+            if (mapRef.current) {
+              const center = mapRef.current.getCenter();
+              const [minLon, minLat, maxLon, maxLat] = bbox;
+              const dLon = (maxLon - minLon) / 2;
+              const dLat = (maxLat - minLat) / 2;
+              setBbox([
+                center.lng - dLon,
+                center.lat - dLat,
+                center.lng + dLon,
+                center.lat + dLat,
+              ]);
+            }
+          }}
+          title={t('centerHereButton')}
+        >
+          <CenterIcon size={18} />
+          {t('centerHereButton')}
+        </button>
       </div>
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <I18nProvider>
+    <AppInner />
+  </I18nProvider>
+);
 
 export default App;
