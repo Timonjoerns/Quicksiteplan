@@ -6,11 +6,6 @@
 import React, { useRef, useEffect, forwardRef, useImperativeHandle, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import MapboxDraw from '@mapbox/mapbox-gl-draw';
-// @ts-ignore
-// import DrawRectangle from 'mapbox-gl-draw-rectangle-mode';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
-
 
 import { OSMFeatureType } from './DataSelector';
 
@@ -78,9 +73,10 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       };
     }, []);
 
-  // Draw control ref
-  // const drawRef = useRef<MapboxDraw | null>(null);
-
+  // Initial bbox, captured once: used only to position the map on first
+  // load. Intentionally not reactive — re-running this effect on every
+  // bbox change would destroy and recreate the whole map.
+  const initialBboxRef = useRef(bbox);
 
   // Initialize map
   useEffect(() => {
@@ -88,7 +84,7 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       mapRef.current = new maplibregl.Map({
         container: mapContainer.current,
         style: styleUrl,
-        bounds: bbox,
+        bounds: initialBboxRef.current,
         fitBoundsOptions: { padding: 20 },
       });
       setMapInitialized(true);

@@ -22,8 +22,13 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, exportOptions, onEx
           Scale
           <input
             type="number"
+            min={1}
+            step={1}
             value={scale}
-            onChange={e => onExportOptionsChange({ ...exportOptions, scale: Number(e.target.value) })}
+            onChange={e => {
+              const next = Number(e.target.value);
+              onExportOptionsChange({ ...exportOptions, scale: Number.isFinite(next) && next > 0 ? next : 1 });
+            }}
             style={{
               width: '100%',
               maxWidth: 140,

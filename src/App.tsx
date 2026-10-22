@@ -3,7 +3,7 @@ import { DownloadIcon, CenterIcon } from './components/Icons';
 
 import './App.css';
 import MapView from './components/MapView';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { OSMFeatureType } from './components/DataSelector';
 import { fetchOsmData } from './utils/overpass';
 import jsPDF from 'jspdf';
@@ -28,6 +28,28 @@ const DEFAULT_STYLES = [
   { name: 'OSM Default', url: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json' },
 ];
 
+// Paper sizes in mm
+const PAPER_SIZES: Record<string, [number, number]> = {
+  A4: [210, 297],
+  A3: [297, 420],
+  A2: [420, 594],
+  A1: [594, 841],
+  A0: [841, 1189],
+};
+
+// Above this, an Overpass query risks timing out and the browser risks
+// choking on rendering/exporting too many features.
+const MAX_BBOX_AREA_KM2 = 25;
+
+function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, number]): number {
+  const metersPerDegLat = 111320;
+  const centerLat = (minLat + maxLat) / 2;
+  const metersPerDegLon = 40075000 * Math.cos(centerLat * Math.PI / 180) / 360;
+  const widthKm = Math.abs(maxLon - minLon) * metersPerDegLon / 1000;
+  const heightKm = Math.abs(maxLat - minLat) * metersPerDegLat / 1000;
+  return widthKm * heightKm;
+}
+
 const App: React.FC = () => {
   const [bbox, setBbox] = useState<[number, number, number, number]>(DEFAULT_BBOX);
   const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(['water', 'streets', 'buildings', 'trees', 'greenery']);
@@ -40,13 +62,17 @@ const App: React.FC = () => {
   // Only fetch OSM data when user clicks fetch button
   useEffect(() => {
     if (!fetchRequested) return;
+    setFetchRequested(false);
+    if (bboxAreaKm2(bbox) > MAX_BBOX_AREA_KM2) {
+      setError(`Export area is too large (max ${MAX_BBOX_AREA_KM2} km²). Zoom in or reduce the scale.`);
+      return;
+    }
     setLoading(true);
     setError(null);
     fetchOsmData(bbox, selectedTypes)
       .then(data => setOsmData(data))
-      .catch(() => setError('Failed to fetch OSM data'))
+      .catch(() => setError('Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.'))
       .finally(() => setLoading(false));
-    setFetchRequested(false);
   }, [fetchRequested, bbox, selectedTypes]);
 
   // Removed style upload logic
@@ -57,42 +83,37 @@ const App: React.FC = () => {
   const [exportOptions, setExportOptions] = useState<{ scale: number; paperSize: string; orientation: string }>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
   // Removed bboxFits state, no longer needed
 
-  // Helper: set bbox to match paper size/orientation/scale, centered on current bbox center
-  function setPresetBbox({ scale, paperSize, orientation }: { scale: number; paperSize: string; orientation: string }) {
+  // Helper: set bbox to match paper size/orientation/scale, centered on current bbox center.
+  // Uses the functional setState form (reads previous bbox via its callback,
+  // not the component's `bbox` closure) so this has a stable identity and
+  // can be a safe, complete useEffect dependency without re-triggering itself.
+  const setPresetBbox = useCallback(({ scale, paperSize, orientation }: { scale: number; paperSize: string; orientation: string }) => {
     let [wmm, hmm] = PAPER_SIZES[paperSize] || [210, 297];
     if (orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
-    const wMeters = wmm / 1000 * scale;
-    const hMeters = hmm / 1000 * scale;
-    // Center of current bbox
-    const [minLon, minLat, maxLon, maxLat] = bbox;
-    const centerLon = (minLon + maxLon) / 2;
-    const centerLat = (minLat + maxLat) / 2;
-    // Approximate meters per degree at center latitude
-    const metersPerDegLat = 111320;
-    const metersPerDegLon = 40075000 * Math.cos(centerLat * Math.PI / 180) / 360;
-    const dLat = hMeters / 2 / metersPerDegLat;
-    const dLon = wMeters / 2 / metersPerDegLon;
-    setBbox([
-      centerLon - dLon,
-      centerLat - dLat,
-      centerLon + dLon,
-      centerLat + dLat,
-    ]);
-  }
-
-  // Paper sizes in mm
-  const PAPER_SIZES: Record<string, [number, number]> = {
-    A4: [210, 297],
-    A3: [297, 420],
-    A2: [420, 594],
-    A1: [594, 841],
-    A0: [841, 1189],
-  };
+    const safeScale = scale > 0 ? scale : 1;
+    const wMeters = wmm / 1000 * safeScale;
+    const hMeters = hmm / 1000 * safeScale;
+    setBbox(([minLon, minLat, maxLon, maxLat]) => {
+      const centerLon = (minLon + maxLon) / 2;
+      const centerLat = (minLat + maxLat) / 2;
+      // Approximate meters per degree at center latitude
+      const metersPerDegLat = 111320;
+      const metersPerDegLon = 40075000 * Math.cos(centerLat * Math.PI / 180) / 360;
+      const dLat = hMeters / 2 / metersPerDegLat;
+      const dLon = wMeters / 2 / metersPerDegLon;
+      return [
+        centerLon - dLon,
+        centerLat - dLat,
+        centerLon + dLon,
+        centerLat + dLat,
+      ];
+    });
+  }, []);
 
   // When export options change, update bbox to preset size
   useEffect(() => {
     setPresetBbox(exportOptions);
-  }, [exportOptions]);
+  }, [exportOptions, setPresetBbox]);
 
   // Check if bbox fits at current scale using Web Mercator projection (matches export logic)
   // Removed bbox fit check effect
