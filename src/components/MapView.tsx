@@ -9,6 +9,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { OSMFeatureType } from './DataSelector';
 import { findNearestDin, findNearestDinDimension, PAPER_SIZES, DIN_DIMENSIONS } from '../utils/paperSizes';
+import { osmElementsToGeoJSON } from '../utils/osmToGeoJSON';
 
 interface MapViewProps {
   styleUrl: string;
@@ -212,10 +213,10 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
             source: 'resize-guides',
             filter: ['==', ['geometry-type'], 'LineString'],
             paint: {
-              'line-color': '#1a1a1a',
-              'line-width': 1,
-              'line-dasharray': ['case', ['get', 'faint'], ['literal', [1, 2]], ['literal', [1, 0]]],
-              'line-opacity': ['case', ['get', 'faint'], 0.18, 0.3],
+              'line-color': '#2563eb',
+              'line-width': 1.4,
+              'line-dasharray': ['literal', [2, 1.5]],
+              'line-opacity': 0.75,
             },
           });
           map.addLayer({
@@ -225,15 +226,15 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
             filter: ['==', ['geometry-type'], 'Point'],
             layout: {
               'text-field': ['get', 'label'],
-              'text-size': 10,
+              'text-size': 11,
               'text-anchor': ['get', 'anchor'],
               'text-offset': ['get', 'offset'],
               'text-allow-overlap': true,
               'text-ignore-placement': true,
             },
             paint: {
-              'text-color': '#1a1a1a',
-              'text-opacity': 0.5,
+              'text-color': '#2563eb',
+              'text-opacity': 0.95,
               'text-halo-color': '#e3e3de',
               'text-halo-width': 1.2,
             },
@@ -282,6 +283,7 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       | { mode: 'resize-edge'; edge: Edge; bboxAtStart: [number, number, number, number] };
 
     let drag: DragState | null = null;
+    let lastGuideOrientation: 'portrait' | 'landscape' | null = null;
 
     function computeCornerResizeBbox(anchor: [number, number], cursor: [number, number], scale: number) {
       const [anchorLon, anchorLat] = anchor;
@@ -366,46 +368,42 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
     }
 
     // Nested rectangle "shadow guides" anchored at the fixed corner, one per
-    // DIN size in each orientation, so the user can see where to drag to
-    // land exactly on a given format (like the classic A-series diagram).
-    function buildCornerGuides(anchor: [number, number], corner: Corner, scale: number): GeoJSON.Feature[] {
+    // DIN size in the orientation (portrait/landscape) the current drag is
+    // heading toward, so the user can see where to go to land exactly on a
+    // given format (like the classic A-series diagram).
+    function buildCornerGuides(anchor: [number, number], corner: Corner, scale: number, orientation: 'portrait' | 'landscape'): GeoJSON.Feature[] {
       const [anchorLon, anchorLat] = anchor;
       const { lon: dirLon, lat: dirLat } = CORNER_DIRECTION[corner];
       const mPerLon = metersPerDegLon(anchorLat) || 1;
       const features: GeoJSON.Feature[] = [];
 
-      (['portrait', 'landscape'] as const).forEach(orientation => {
-        Object.keys(PAPER_SIZES).forEach(key => {
-          let [wmm, hmm] = PAPER_SIZES[key];
-          if (orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
-          const wMeters = (wmm / 1000) * scale;
-          const hMeters = (hmm / 1000) * scale;
-          const farLon = anchorLon + dirLon * (wMeters / mPerLon);
-          const farLat = anchorLat + dirLat * (hMeters / METERS_PER_DEG_LAT);
-          const faint = orientation === 'landscape';
+      Object.keys(PAPER_SIZES).forEach(key => {
+        let [wmm, hmm] = PAPER_SIZES[key];
+        if (orientation === 'landscape') [wmm, hmm] = [hmm, wmm];
+        const wMeters = (wmm / 1000) * scale;
+        const hMeters = (hmm / 1000) * scale;
+        const farLon = anchorLon + dirLon * (wMeters / mPerLon);
+        const farLat = anchorLat + dirLat * (hMeters / METERS_PER_DEG_LAT);
 
-          features.push({
-            type: 'Feature',
-            properties: { faint },
-            geometry: {
-              type: 'LineString',
-              coordinates: [
-                [anchorLon, anchorLat], [farLon, anchorLat], [farLon, farLat], [anchorLon, farLat], [anchorLon, anchorLat],
-              ],
-            },
-          });
+        features.push({
+          type: 'Feature',
+          properties: { faint: false },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [anchorLon, anchorLat], [farLon, anchorLat], [farLon, farLat], [anchorLon, farLat], [anchorLon, anchorLat],
+            ],
+          },
+        });
 
-          if (!faint) {
-            features.push({
-              type: 'Feature',
-              properties: {
-                label: key,
-                anchor: `${dirLat > 0 ? 'bottom' : 'top'}-${dirLon > 0 ? 'left' : 'right'}`,
-                offset: [dirLon > 0 ? 0.4 : -0.4, dirLat > 0 ? -0.4 : 0.4],
-              },
-              geometry: { type: 'Point', coordinates: [farLon, farLat] },
-            });
-          }
+        features.push({
+          type: 'Feature',
+          properties: {
+            label: orientation === 'landscape' ? `${key} L` : key,
+            anchor: `${dirLat > 0 ? 'bottom' : 'top'}-${dirLon > 0 ? 'left' : 'right'}`,
+            offset: [dirLon > 0 ? 0.4 : -0.4, dirLat > 0 ? -0.4 : 0.4],
+          },
+          geometry: { type: 'Point', coordinates: [farLon, farLat] },
         });
       });
       return features;
@@ -469,7 +467,7 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       if (corner) {
         const anchor = cornerLngLat(bbox, OPPOSITE_CORNER[corner]);
         drag = { mode: 'resize-corner', corner, anchor };
-        setGuides(buildCornerGuides(anchor, corner, scale));
+        lastGuideOrientation = null;
       } else if (edge) {
         drag = { mode: 'resize-edge', edge, bboxAtStart: bbox };
         setGuides(buildEdgeGuides(bbox, edge, scale));
@@ -498,6 +496,15 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
         const [minLon, minLat, maxLon, maxLat] = drag.startBbox;
         onBboxChange([minLon + dLon, minLat + dLat, maxLon + dLon, maxLat + dLat]);
       } else if (drag.mode === 'resize-corner') {
+        const [anchorLon, anchorLat] = drag.anchor;
+        const mPerLon = metersPerDegLon(anchorLat) || 1;
+        const rawWMeters = Math.abs(e.lngLat.lng - anchorLon) * mPerLon;
+        const rawHMeters = Math.abs(e.lngLat.lat - anchorLat) * METERS_PER_DEG_LAT;
+        const orientation: 'portrait' | 'landscape' = rawWMeters >= rawHMeters ? 'landscape' : 'portrait';
+        if (orientation !== lastGuideOrientation) {
+          lastGuideOrientation = orientation;
+          setGuides(buildCornerGuides(drag.anchor, drag.corner, scale, orientation));
+        }
         const { newBbox } = computeCornerResizeBbox(drag.anchor, [e.lngLat.lng, e.lngLat.lat], scale);
         onBboxChange(newBbox);
       } else {
@@ -598,7 +605,7 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
       });
       if (osmData && osmData.elements) {
         // Split features by type
-        const geojson = osmToGeoJSON(osmData);
+        const geojson = osmElementsToGeoJSON(osmData.elements);
         // Only show selected types
         const water = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('water') ? geojson.features.filter(f => f.properties && (f.properties.waterway || f.properties.natural === 'water')) : [] };
         const streets = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('streets') ? geojson.features.filter(f => f.properties && (f.properties.highway)) : [] };
@@ -672,56 +679,6 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
     }
     return () => { cancelled = true; };
   }, [osmData, selectedTypes]);
-
-  // Helper: Convert OSM JSON to GeoJSON
-  function osmToGeoJSON(osm: any): GeoJSON.FeatureCollection {
-    // Handle both nodes (for trees) and ways (for other features)
-    const nodes: Record<string, [number, number]> = {};
-    for (const el of osm.elements) {
-      if (el.type === 'node') {
-        nodes[el.id] = [el.lon, el.lat];
-      }
-    }
-    const features: GeoJSON.Feature[] = [];
-    for (const el of osm.elements) {
-      // Handle standalone nodes (like trees)
-      if (el.type === 'node' && el.tags && Object.keys(el.tags).length > 0) {
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
-          properties: el.tags || {},
-        });
-      }
-      // Handle ways
-      if (el.type === 'way' && el.nodes) {
-        const coords = el.nodes.map((nid: string) => nodes[nid]).filter(Boolean);
-        if (coords.length > 1) {
-          // Check if it's a closed way (polygon) - for greenery areas
-          const isClosed = el.nodes[0] === el.nodes[el.nodes.length - 1];
-          const isArea = isClosed && (
-            el.tags?.landuse || 
-            el.tags?.leisure === 'park' || 
-            el.tags?.leisure === 'garden' || 
-            el.tags?.leisure === 'nature_reserve' ||
-            el.tags?.natural === 'wood' ||
-            el.tags?.natural === 'scrub' ||
-            el.tags?.natural === 'grassland' ||
-            el.tags?.natural === 'heath'
-          );
-          
-          features.push({
-            type: 'Feature',
-            geometry: { 
-              type: isArea ? 'Polygon' : 'LineString', 
-              coordinates: isArea ? [coords] : coords 
-            },
-            properties: el.tags || {},
-          });
-        }
-      }
-    }
-    return { type: 'FeatureCollection', features };
-  }
 
   // Removed auto-fitBounds on every bbox change to fix zoom issue
 

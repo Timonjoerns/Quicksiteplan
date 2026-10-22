@@ -33,8 +33,10 @@ export interface Dictionary {
   exportHintNoData: string;
 
   loadingText: string;
+  loadingTextProgress: string;
   errorAreaTooLarge: string;
   errorFetchFailed: string;
+  errorPartialFetch: string;
 
   step1: string;
   step2: string;
@@ -76,8 +78,10 @@ export const dictionaries: Record<Lang, Dictionary> = {
     exportHintNoData: 'Fetch OSM data first to enable export.',
 
     loadingText: 'Loading OSM data…',
+    loadingTextProgress: 'Loading layers… {done}/{total}',
     errorAreaTooLarge: 'Export area is too large (max {max} km²). Zoom in or reduce the scale.',
     errorFetchFailed: 'Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.',
+    errorPartialFetch: 'Loaded, but these layers failed: {layers}. Try fetching again.',
 
     step1: "Drag the dashed frame, or its corners, to position and size your export area — it snaps to DIN paper formats.",
     step2: 'Pick the OSM layers you want and fetch the data in the sidebar.',
@@ -117,8 +121,10 @@ export const dictionaries: Record<Lang, Dictionary> = {
     exportHintNoData: 'Zuerst OSM-Daten abrufen, um den Export freizuschalten.',
 
     loadingText: 'OSM-Daten werden geladen…',
+    loadingTextProgress: 'Ebenen werden geladen… {done}/{total}',
     errorAreaTooLarge: 'Exportfläche zu groß (max. {max} km²). Zoomen Sie hinein oder verringern Sie den Maßstab.',
     errorFetchFailed: 'OSM-Daten konnten nicht geladen werden. Der Server ist evtl. ausgelastet — versuchen Sie es gleich erneut.',
+    errorPartialFetch: 'Geladen, aber diese Ebenen sind fehlgeschlagen: {layers}. Bitte erneut abrufen.',
 
     step1: 'Rahmen oder Eckpunkte ziehen, um die Exportfläche zu positionieren und zu skalieren — er rastet an DIN-Formaten ein.',
     step2: 'Gewünschte OSM-Ebenen wählen und die Daten in der Seitenleiste abrufen.',

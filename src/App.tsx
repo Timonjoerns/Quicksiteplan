@@ -6,8 +6,10 @@ import MapView from './components/MapView';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { OSMFeatureType } from './components/DataSelector';
 import { fetchOsmData } from './utils/overpass';
+import { osmElementsToGeoJSON } from './utils/osmToGeoJSON';
 import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
+import type { Dictionary } from './i18n/translations';
 import jsPDF from 'jspdf';
 import proj4 from 'proj4';
 
@@ -29,16 +31,29 @@ function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, 
   return widthKm * heightKm;
 }
 
+const LAYER_LABEL_KEYS: Record<OSMFeatureType, keyof Dictionary> = {
+  water: 'layerWater',
+  streets: 'layerStreets',
+  buildings: 'layerBuildings',
+  railways: 'layerRailways',
+  trees: 'layerTrees',
+  greenery: 'layerGreenery',
+};
+
 const AppInner: React.FC = () => {
   const { t } = useI18n();
   const [bbox, setBbox] = useState<[number, number, number, number]>(DEFAULT_BBOX);
   const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(['water', 'streets', 'buildings', 'trees', 'greenery']);
   const [osmData, setOsmData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fetchRequested, setFetchRequested] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Only fetch OSM data when user clicks fetch button
+  // Only fetch OSM data when user clicks fetch button. Each selected layer
+  // is requested separately (smaller payloads, parallel), so one slow or
+  // failing layer doesn't block the rest.
   useEffect(() => {
     if (!fetchRequested) return;
     setFetchRequested(false);
@@ -46,12 +61,38 @@ const AppInner: React.FC = () => {
       setError(t('errorAreaTooLarge', { max: MAX_BBOX_AREA_KM2 }));
       return;
     }
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setError(null);
-    fetchOsmData(bbox, selectedTypes)
-      .then(data => setOsmData(data))
-      .catch(() => setError(t('errorFetchFailed')))
-      .finally(() => setLoading(false));
+    setLoadingProgress({ done: 0, total: selectedTypes.length });
+    fetchOsmData(bbox, selectedTypes, {
+      signal: controller.signal,
+      onProgress: (p) => {
+        if (abortControllerRef.current !== controller) return;
+        setLoadingProgress({ done: p.done, total: p.total });
+      },
+    })
+      .then(result => {
+        if (abortControllerRef.current !== controller) return; // superseded by a newer fetch
+        setOsmData({ elements: result.elements });
+        if (result.failedLayers.length > 0) {
+          const layerNames = result.failedLayers.map(l => t(LAYER_LABEL_KEYS[l])).join(', ');
+          setError(t('errorPartialFetch', { layers: layerNames }));
+        }
+      })
+      .catch((err) => {
+        if (abortControllerRef.current !== controller) return; // superseded by a newer fetch
+        if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
+        setError(t('errorFetchFailed'));
+      })
+      .finally(() => {
+        if (abortControllerRef.current !== controller) return; // superseded by a newer fetch
+        setLoading(false);
+        setLoadingProgress(null);
+      });
   }, [fetchRequested, bbox, selectedTypes, t]);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -105,51 +146,7 @@ const AppInner: React.FC = () => {
     });
     // Draw OSM features as vector lines, using UTM projection for true metric scaling
     if (osmData && osmData.elements) {
-      // Convert OSM JSON to GeoJSON FeatureCollection (copied from MapView)
-      const nodes: Record<string, [number, number]> = {};
-      for (const el of osmData.elements) {
-        if (el.type === 'node') {
-          nodes[el.id] = [el.lon, el.lat];
-        }
-      }
-      const features: GeoJSON.Feature[] = [];
-      for (const el of osmData.elements) {
-        // Handle standalone nodes (like trees)
-        if (el.type === 'node' && el.tags && Object.keys(el.tags).length > 0) {
-          features.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
-            properties: el.tags || {},
-          });
-        }
-        // Handle ways
-        if (el.type === 'way' && el.nodes) {
-          const coords = el.nodes.map((nid: string) => nodes[nid]).filter(Boolean);
-          if (coords.length > 1) {
-            // Check if it's a closed way (polygon) - for greenery areas
-            const isClosed = el.nodes[0] === el.nodes[el.nodes.length - 1];
-            const isArea = isClosed && (
-              el.tags?.landuse ||
-              el.tags?.leisure === 'park' ||
-              el.tags?.leisure === 'garden' ||
-              el.tags?.leisure === 'nature_reserve' ||
-              el.tags?.natural === 'wood' ||
-              el.tags?.natural === 'scrub' ||
-              el.tags?.natural === 'grassland' ||
-              el.tags?.natural === 'heath'
-            );
-
-            features.push({
-              type: 'Feature',
-              geometry: {
-                type: isArea ? 'Polygon' : 'LineString',
-                coordinates: isArea ? [coords] : coords
-              },
-              properties: el.tags || {},
-            });
-          }
-        }
-      }
+      const { features } = osmElementsToGeoJSON(osmData.elements);
       // PDF drawing area
       const margin = 10;
       const pageW = doc.internal.pageSize.getWidth();
@@ -339,6 +336,7 @@ const AppInner: React.FC = () => {
 
       <SidebarCollapsible
         loading={loading}
+        loadingProgress={loadingProgress}
         error={error}
         hasData={!!osmData}
         bboxAreaKm2={currentAreaKm2}

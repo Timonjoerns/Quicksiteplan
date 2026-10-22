@@ -10,6 +10,7 @@ import { OSMFeatureType } from './DataSelector';
 
 interface SidebarCollapsibleProps {
   loading: boolean;
+  loadingProgress: { done: number; total: number } | null;
   error: string | null;
   hasData: boolean;
   bboxAreaKm2: number;
@@ -23,7 +24,7 @@ interface SidebarCollapsibleProps {
 }
 
 const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
-  loading, error, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, onFetch,
+  loading, loadingProgress, error, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, onFetch,
 }) => {
   const { t, lang, setLang } = useI18n();
   const [featuresOpen, setFeaturesOpen] = useState(true);
@@ -55,7 +56,11 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
               <DownloadIcon size={16} />
               {loading ? t('fetchButtonLoading') : t('fetchButton')}
             </button>
-            {loading && <LoadingParticles label={t('loadingText')} />}
+            {loading && (
+              <LoadingParticles
+                label={loadingProgress ? t('loadingTextProgress', { done: loadingProgress.done, total: loadingProgress.total }) : t('loadingText')}
+              />
+            )}
             {!loading && error && <div className="qsp-status qsp-status--error" style={{ margin: '14px 0 0' }}>{error}</div>}
           </div>
         )}
