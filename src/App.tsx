@@ -15,17 +15,16 @@ import { prepareExportGeometry, computeScaleBar, areaPolygons } from './utils/ex
 import { buildExportSvg } from './utils/exportSvg';
 import jsPDF from 'jspdf';
 
-const DEFAULT_BBOX: [number, number, number, number] = [13.375, 52.515, 13.405, 52.525]; // Berlin example
+// Hannover 96 stadium (Heinz von Heiden Arena / Niedersachsenstadion)
+const DEFAULT_BBOX: [number, number, number, number] = [9.7163, 52.3550, 9.7463, 52.3650];
 const DEFAULT_STYLES = [
   { name: 'OSM Default', url: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json' },
 ];
 
-// Above this, an Overpass query risks timing out and the browser risks
-// choking on rendering/exporting too many features.
-// Larger areas are fetched in tiles (see overpass.ts); this cap keeps the
-// number of requests, the download time and the browser's memory for map
-// preview and export reasonable.
-const MAX_BBOX_AREA_KM2 = 150;
+// No hard cap: large areas are fetched in tiles with less detail at small
+// scales (see overpass.ts). Above this size the UI only warns that loading
+// takes longer and exported files get big.
+const LARGE_AREA_KM2 = 150;
 
 function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, number]): number {
   const metersPerDegLat = 111320;
@@ -45,6 +44,7 @@ const AppInner: React.FC = () => {
   const [loadingProgress, setLoadingProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fetchRequested, setFetchRequested] = useState(false);
+  const [exportOptions, setExportOptions] = useState<ExportOptions>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Only fetch OSM data when user clicks fetch button. Each selected layer
@@ -53,10 +53,6 @@ const AppInner: React.FC = () => {
   useEffect(() => {
     if (!fetchRequested) return;
     setFetchRequested(false);
-    if (bboxAreaKm2(bbox) > MAX_BBOX_AREA_KM2) {
-      setError(t('errorAreaTooLarge', { max: MAX_BBOX_AREA_KM2 }));
-      return;
-    }
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -65,6 +61,7 @@ const AppInner: React.FC = () => {
     setError(null);
     setLoadingProgress(null);
     fetchOsmData(bbox, selectedTypes, {
+      scale: exportOptions.scale,
       signal: controller.signal,
       onProgress: (p) => {
         if (abortControllerRef.current !== controller) return;
@@ -89,11 +86,10 @@ const AppInner: React.FC = () => {
         setLoading(false);
         setLoadingProgress(null);
       });
-  }, [fetchRequested, bbox, selectedTypes, t]);
+  }, [fetchRequested, bbox, selectedTypes, exportOptions.scale, t]);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const [exportOptions, setExportOptions] = useState<ExportOptions>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
   const [stylePreset, setStylePreset] = useState<PresetKey>('default');
   const [layerStyles, setLayerStyles] = useState<StyleMap>(() => cloneStyleMap(STYLE_PRESETS.default));
 
@@ -342,7 +338,7 @@ const AppInner: React.FC = () => {
         exportError={exportError}
         hasData={!!osmData}
         bboxAreaKm2={currentAreaKm2}
-        maxBboxAreaKm2={MAX_BBOX_AREA_KM2}
+        largeAreaKm2={LARGE_AREA_KM2}
         selectedTypes={selectedTypes}
         setSelectedTypes={setSelectedTypes}
         exportOptions={exportOptions}

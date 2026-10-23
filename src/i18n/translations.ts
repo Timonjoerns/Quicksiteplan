@@ -49,7 +49,9 @@ export interface Dictionary {
 
   loadingText: string;
   loadingTextProgress: string;
-  errorAreaTooLarge: string;
+  largeAreaWarning: string;
+  detailMediumHint: string;
+  detailCoarseHint: string;
   errorFetchFailed: string;
   errorPartialFetch: string;
   errorExportFailed: string;
@@ -89,7 +91,7 @@ export const dictionaries: Record<Lang, Dictionary> = {
     widthLabel: 'Width (mm)',
     heightLabel: 'Height (mm)',
 
-    exportAreaHint: 'Export area: {area} km² (max {max} km²)',
+    exportAreaHint: 'Export area: {area} km²',
     exportButton: 'Export as PDF',
     exportSvgButton: 'Export as SVG',
     exportSvgHint: 'Each layer (water, streets, buildings, ...) as a separate named group — ideal for Illustrator/Inkscape.',
@@ -110,7 +112,9 @@ export const dictionaries: Record<Lang, Dictionary> = {
 
     loadingText: 'Loading OSM data…',
     loadingTextProgress: 'Loading data… {done}/{total} requests',
-    errorAreaTooLarge: 'Export area is too large (max {max} km²). Zoom in or reduce the scale.',
+    largeAreaWarning: 'Large area: loading can take several minutes and exported files get big.',
+    detailMediumHint: 'Reduced detail at this scale: {layers} left out, no footpaths or service roads.',
+    detailCoarseHint: 'Overview detail at this scale: {layers} left out, main roads, rivers and large green areas only.',
     errorFetchFailed: 'Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.',
     errorPartialFetch: 'Loaded, but these layers failed: {layers}. Try fetching again.',
     errorExportFailed: 'PDF export failed. Try again, or fetch the data again first.',
@@ -148,7 +152,7 @@ export const dictionaries: Record<Lang, Dictionary> = {
     widthLabel: 'Breite (mm)',
     heightLabel: 'Höhe (mm)',
 
-    exportAreaHint: 'Exportfläche: {area} km² (max. {max} km²)',
+    exportAreaHint: 'Exportfläche: {area} km²',
     exportButton: 'Als PDF exportieren',
     exportSvgButton: 'Als SVG exportieren',
     exportSvgHint: 'Jede Ebene (Gewässer, Straßen, Gebäude, ...) als eigene benannte Gruppe — ideal für Illustrator/Inkscape.',
@@ -169,7 +173,9 @@ export const dictionaries: Record<Lang, Dictionary> = {
 
     loadingText: 'OSM-Daten werden geladen…',
     loadingTextProgress: 'Daten werden geladen… {done}/{total} Abfragen',
-    errorAreaTooLarge: 'Exportfläche zu groß (max. {max} km²). Zoomen Sie hinein oder verringern Sie den Maßstab.',
+    largeAreaWarning: 'Große Fläche: Das Laden kann mehrere Minuten dauern, Exportdateien werden groß.',
+    detailMediumHint: 'Reduzierte Details in diesem Maßstab: ohne {layers}, keine Fußwege und Zufahrten.',
+    detailCoarseHint: 'Übersichtsdetails in diesem Maßstab: ohne {layers}, nur Hauptstraßen, Flüsse und große Grünflächen.',
     errorFetchFailed: 'OSM-Daten konnten nicht geladen werden. Der Server ist evtl. ausgelastet — versuchen Sie es gleich erneut.',
     errorPartialFetch: 'Geladen, aber diese Ebenen sind fehlgeschlagen: {layers}. Bitte erneut abrufen.',
     errorExportFailed: 'PDF-Export fehlgeschlagen. Erneut versuchen oder die Daten zuerst neu abrufen.',

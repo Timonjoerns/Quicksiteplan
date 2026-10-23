@@ -1,6 +1,8 @@
 import React from 'react';
 import { ExportOptions, PAPER_SIZES } from '../utils/paperSizes';
 import { useI18n } from '../i18n/I18nContext';
+import { getDetailLevel, OMITTED_LAYERS } from '../utils/overpass';
+import { LAYER_LABEL_KEYS } from '../utils/layerLabels';
 
 interface ExportPanelProps {
   onExport: (options: ExportOptions) => void;
@@ -8,14 +10,15 @@ interface ExportPanelProps {
   exportOptions: ExportOptions;
   onExportOptionsChange: (opts: ExportOptions) => void;
   bboxAreaKm2: number;
-  maxBboxAreaKm2: number;
+  largeAreaKm2: number;
   hasData: boolean;
 }
 
-const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, exportOptions, onExportOptionsChange, bboxAreaKm2, maxBboxAreaKm2, hasData }) => {
+const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, exportOptions, onExportOptionsChange, bboxAreaKm2, largeAreaKm2, hasData }) => {
   const { t } = useI18n();
   const { scale, paperSize, orientation } = exportOptions;
-  const areaTooLarge = bboxAreaKm2 > maxBboxAreaKm2;
+  const largeArea = bboxAreaKm2 > largeAreaKm2;
+  const detail = getDetailLevel(scale);
   const isCustom = paperSize === 'Custom';
 
   return (
@@ -93,9 +96,19 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, export
         </label>
       )}
 
-      <div className={`qsp-field__hint${areaTooLarge ? ' qsp-field__hint--warn' : ''}`}>
-        {t('exportAreaHint', { area: bboxAreaKm2.toFixed(2), max: maxBboxAreaKm2 })}
+      <div className="qsp-field__hint">
+        {t('exportAreaHint', { area: bboxAreaKm2.toFixed(2) })}
       </div>
+      {detail !== 'full' && (
+        <div className="qsp-field__hint">
+          {t(detail === 'coarse' ? 'detailCoarseHint' : 'detailMediumHint', {
+            layers: OMITTED_LAYERS[detail].map(l => t(LAYER_LABEL_KEYS[l])).join(', '),
+          })}
+        </div>
+      )}
+      {largeArea && (
+        <div className="qsp-field__hint qsp-field__hint--warn">{t('largeAreaWarning')}</div>
+      )}
       <div style={{ height: 14 }} />
       {hasData ? (
         <>

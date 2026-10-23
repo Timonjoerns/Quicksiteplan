@@ -17,7 +17,7 @@ interface SidebarCollapsibleProps {
   exportError: string | null;
   hasData: boolean;
   bboxAreaKm2: number;
-  maxBboxAreaKm2: number;
+  largeAreaKm2: number;
   selectedTypes: OSMFeatureType[];
   setSelectedTypes: (types: OSMFeatureType[]) => void;
   exportOptions: ExportOptions;
@@ -32,7 +32,7 @@ interface SidebarCollapsibleProps {
 }
 
 const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
-  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, handleExportSVG, onFetch,
+  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, largeAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, handleExportSVG, onFetch,
   stylePreset, onStylePresetChange, layerStyles, onLayerStyleChange,
 }) => {
   const { t, lang, setLang } = useI18n();
@@ -89,7 +89,7 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
               exportOptions={exportOptions}
               onExportOptionsChange={setExportOptions}
               bboxAreaKm2={bboxAreaKm2}
-              maxBboxAreaKm2={maxBboxAreaKm2}
+              largeAreaKm2={largeAreaKm2}
               hasData={hasData}
             />
             {exportError && <div className="qsp-status qsp-status--error" style={{ margin: '14px 0 0' }}>{exportError}</div>}
