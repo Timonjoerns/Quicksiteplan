@@ -9,9 +9,9 @@ import { fetchOsmData } from './utils/overpass';
 import { osmElementsToGeoJSON } from './utils/osmToGeoJSON';
 import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
-import { PresetKey, StyleMap, LayerStyle, STYLE_PRESETS, cloneStyleMap } from './utils/exportStyles';
+import { PresetKey, StyleMap, LayerStyle, STYLE_PRESETS, cloneStyleMap, PRESET_BACKGROUNDS } from './utils/exportStyles';
 import { LAYER_LABEL_KEYS } from './utils/layerLabels';
-import { prepareExportGeometry, computeScaleBar } from './utils/exportGeometry';
+import { prepareExportGeometry, computeScaleBar, areaPolygons } from './utils/exportGeometry';
 import { buildExportSvg } from './utils/exportSvg';
 import jsPDF from 'jspdf';
 
@@ -181,49 +181,41 @@ const AppInner: React.FC = () => {
           doc.setDrawColor(...color);
           doc.setLineWidth(lineWidth);
           doc.setLineDashPattern(dash ?? [], 0);
-          if (fill) doc.setFillColor(color[0], color[1], color[2]);
+          const fc = style.fillColor ?? color;
+          if (fill) doc.setFillColor(fc[0], fc[1], fc[2]);
+
+          const tracePts = (pts: [number, number][], close: boolean) => {
+            pts.forEach(([x, y], i) => {
+              if (i === 0) doc.moveTo(x, y);
+              else doc.lineTo(x, y);
+            });
+            if (close) doc.lineTo(pts[0][0], pts[0][1]);
+          };
 
           cat.forEach(f => {
-            if (f.geometry.type === 'LineString') {
-              const coords = f.geometry.coordinates as [number, number][];
-              const projected = coords.map(project);
-              if (projected.length > 1 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
-                let started = false;
-                projected.forEach(([x, y]) => {
-                  if (isNaN(x) || isNaN(y)) return;
-                  if (!started) {
-                    doc.moveTo(x, y);
-                    started = true;
-                  } else {
-                    doc.lineTo(x, y);
-                  }
-                });
-                if (started) doc.stroke();
-              }
-            } else if (f.geometry.type === 'Polygon') {
-              const rings = f.geometry.coordinates as [number, number][][];
-              const outerRing = rings[0];
-              const projected = outerRing.map(project);
-              if (projected.length > 2 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
-                const validPoints = projected.filter(([x, y]) => !isNaN(x) && !isNaN(y));
-                if (validPoints.length > 2) {
-                  if (fill) {
-                    if (fillOpacity < 1) doc.setGState(new (doc as any).GState({ opacity: fillOpacity }));
-                    validPoints.forEach(([x, y], i) => {
-                      if (i === 0) doc.moveTo(x, y);
-                      else doc.lineTo(x, y);
-                    });
-                    doc.lineTo(validPoints[0][0], validPoints[0][1]);
-                    doc.fill();
-                    if (fillOpacity < 1) doc.setGState(new (doc as any).GState({ opacity: 1 }));
-                  }
-                  validPoints.forEach(([x, y], i) => {
-                    if (i === 0) doc.moveTo(x, y);
-                    else doc.lineTo(x, y);
-                  });
-                  doc.lineTo(validPoints[0][0], validPoints[0][1]);
-                  doc.stroke();
+            const polygons = areaPolygons(f);
+            if (polygons) {
+              polygons.forEach(rings => {
+                const projectedRings = rings.map(r => r.map(project)).filter(r => r.length > 2);
+                if (projectedRings.length === 0) return;
+                if (fill) {
+                  // All rings in one path + even-odd fill, so inner rings
+                  // (islands, courtyards) are left as holes.
+                  if (fillOpacity < 1) doc.setGState(new (doc as any).GState({ opacity: fillOpacity }));
+                  projectedRings.forEach(r => tracePts(r, true));
+                  doc.fillEvenOdd();
+                  if (fillOpacity < 1) doc.setGState(new (doc as any).GState({ opacity: 1 }));
                 }
+                projectedRings.forEach(r => {
+                  tracePts(r, true);
+                  doc.stroke();
+                });
+              });
+            } else if (f.geometry.type === 'LineString') {
+              const projected = (f.geometry.coordinates as [number, number][]).map(project);
+              if (projected.length > 1) {
+                tracePts(projected, false);
+                doc.stroke();
               }
             }
           });
@@ -308,7 +300,7 @@ const AppInner: React.FC = () => {
       const [wmm, hmm] = getPaperDimsMm(options);
       const { features } = osmElementsToGeoJSON(osmData.elements);
       const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, features, selectedTypes, wmm, hmm);
-      const svg = buildExportSvg({ wmm, hmm, categories, project, layerStyles, trueWidthMeters, exportOptions: options });
+      const svg = buildExportSvg({ wmm, hmm, categories, project, layerStyles, trueWidthMeters, exportOptions: options, background: PRESET_BACKGROUNDS[stylePreset] });
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

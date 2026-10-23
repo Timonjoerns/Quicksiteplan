@@ -4,8 +4,10 @@ import { OSMFeatureType } from '../components/DataSelector';
 export type CategoryMap = Partial<Record<OSMFeatureType, GeoJSON.Feature[]>>;
 
 export interface PreparedExport {
-  // Projects a [lon, lat] into page-space [x, y] in mm (0,0 = top-left),
-  // or [NaN, NaN] if the point falls outside the export bbox.
+  // Projects a [lon, lat] into page-space [x, y] in mm (0,0 = top-left).
+  // Points outside the export bbox land off-page rather than being
+  // dropped — dropping them would cut chords across features that extend
+  // past the edge (rivers, long streets); the page/viewBox clips instead.
   project: (coord: [number, number]) => [number, number];
   categories: CategoryMap;
   // True ground width of the bbox in meters (equirectangular approximation)
@@ -51,7 +53,6 @@ export function prepareExportGeometry(
 
   const project = ([lon, lat]: [number, number]): [number, number] => {
     const [x, y] = projectToMerc([lon, lat]);
-    if (x < cropMinX || x > cropMaxX || y < cropMinY || y > cropMaxY) return [NaN, NaN];
     const px = ((x - cropMinX) / (cropMaxX - cropMinX)) * pageW;
     const py = pageH - ((y - cropMinY) / (cropMaxY - cropMinY)) * pageH;
     return [px, py];
@@ -74,6 +75,20 @@ export function prepareExportGeometry(
   };
 
   return { project, categories, trueWidthMeters };
+}
+
+// Returns a feature's area geometry as polygons ([outer, ...holes][]), or
+// null for open lines/points. Closed LineStrings count as areas: OSM
+// buildings and small lakes arrive as closed ways, not Polygons.
+export function areaPolygons(f: GeoJSON.Feature): [number, number][][][] | null {
+  const g = f.geometry;
+  if (g.type === 'Polygon') return [g.coordinates as [number, number][][]];
+  if (g.type === 'MultiPolygon') return g.coordinates as [number, number][][][];
+  if (g.type === 'LineString') {
+    const c = g.coordinates as [number, number][];
+    if (c.length > 3 && c[0][0] === c[c.length - 1][0] && c[0][1] === c[c.length - 1][1]) return [[c]];
+  }
+  return null;
 }
 
 // Picks a round scale-bar length (in true meters) that fits within ~1/4 of

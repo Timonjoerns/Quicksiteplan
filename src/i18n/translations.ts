@@ -40,6 +40,9 @@ export interface Dictionary {
   presetBlueprint: string;
   presetGrayscale: string;
   presetBold: string;
+  presetSketch: string;
+  presetAerial: string;
+  presetSvgOnlyHint: string;
   colorLabel: string;
   lineWidthLabel: string;
 
@@ -97,6 +100,9 @@ export const dictionaries: Record<Lang, Dictionary> = {
     presetBlueprint: 'Blueprint (mono)',
     presetGrayscale: 'Grayscale',
     presetBold: 'Bold',
+    presetSketch: 'Sketch (architectural)',
+    presetAerial: 'Aerial (stippled)',
+    presetSvgOnlyHint: 'Shadows, textures, canopies, background and double-line streets appear in the SVG export only — the PDF uses a flat version.',
     colorLabel: 'Color',
     lineWidthLabel: 'Line width (mm)',
 
@@ -152,6 +158,9 @@ export const dictionaries: Record<Lang, Dictionary> = {
     presetBlueprint: 'Blaupause (mono)',
     presetGrayscale: 'Graustufen',
     presetBold: 'Kräftig',
+    presetSketch: 'Skizze (Architektur)',
+    presetAerial: 'Luftbild (gepunktet)',
+    presetSvgOnlyHint: 'Schatten, Texturen, Baumkronen, Hintergrund und doppelte Straßenlinien gibt es nur im SVG-Export — das PDF zeigt eine flache Version.',
     colorLabel: 'Farbe',
     lineWidthLabel: 'Linienstärke (mm)',
 

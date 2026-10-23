@@ -1,6 +1,6 @@
 import React from 'react';
 import { OSMFeatureType } from './DataSelector';
-import { PresetKey, StyleMap, LayerStyle, STYLE_PRESET_KEYS } from '../utils/exportStyles';
+import { PresetKey, StyleMap, LayerStyle, STYLE_PRESET_KEYS, SVG_ONLY_PRESETS } from '../utils/exportStyles';
 import { LAYER_LABEL_KEYS } from '../utils/layerLabels';
 import { useI18n } from '../i18n/I18nContext';
 
@@ -12,11 +12,13 @@ interface StylePanelProps {
   onLayerStyleChange: (type: OSMFeatureType, patch: Partial<LayerStyle>) => void;
 }
 
-const PRESET_LABEL_KEYS: Record<PresetKey, 'presetDefault' | 'presetBlueprint' | 'presetGrayscale' | 'presetBold'> = {
+const PRESET_LABEL_KEYS: Record<PresetKey, 'presetDefault' | 'presetBlueprint' | 'presetGrayscale' | 'presetBold' | 'presetSketch' | 'presetAerial'> = {
   default: 'presetDefault',
   blueprint: 'presetBlueprint',
   grayscale: 'presetGrayscale',
   bold: 'presetBold',
+  sketch: 'presetSketch',
+  aerial: 'presetAerial',
 };
 
 function rgbToHex([r, g, b]: [number, number, number]): string {
@@ -45,6 +47,9 @@ const StylePanel: React.FC<StylePanelProps> = ({ selectedTypes, preset, onPreset
             <option key={key} value={key}>{t(PRESET_LABEL_KEYS[key])}</option>
           ))}
         </select>
+        {SVG_ONLY_PRESETS.includes(preset) && (
+          <div className="qsp-field__hint">{t('presetSvgOnlyHint')}</div>
+        )}
       </label>
 
       <div className="qsp-style-rows">

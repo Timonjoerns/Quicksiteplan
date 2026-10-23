@@ -4,12 +4,14 @@ import { OSMFeatureType } from '../components/DataSelector';
 // Map OSMFeatureType to Overpass QL queries. 'greenery' expands to a union
 // of several sub-filters, each still part of the SAME request for that type.
 const featureQueries: Record<OSMFeatureType, string> = {
-  water: 'way["natural"="water"]',
+  // Lakes/rivers mapped as areas (closed ways, or multipolygon relations for
+  // the large ones), plus river/canal/stream center lines.
+  water: 'way["natural"="water"];relation["natural"="water"]["type"="multipolygon"];way["waterway"~"^(river|canal|stream)$"]',
   streets: 'way["highway"]',
   buildings: 'way["building"]',
   railways: 'way["railway"="rail"]',
   trees: 'node["natural"="tree"]',
-  greenery: 'way["landuse"="forest"];way["landuse"="grass"];way["landuse"="meadow"];way["landuse"="orchard"];way["landuse"="vineyard"];way["landuse"="farmland"];way["landuse"="allotments"];way["leisure"="park"];way["leisure"="garden"];way["leisure"="nature_reserve"];way["natural"="wood"];way["natural"="scrub"];way["natural"="grassland"];way["natural"="heath"]',
+  greenery: 'way["landuse"="forest"];way["landuse"="grass"];way["landuse"="meadow"];way["landuse"="orchard"];way["landuse"="vineyard"];way["landuse"="farmland"];way["landuse"="allotments"];way["leisure"="park"];way["leisure"="garden"];way["leisure"="nature_reserve"];way["natural"="wood"];way["natural"="scrub"];way["natural"="grassland"];way["natural"="heath"];relation["leisure"="park"]["type"="multipolygon"];relation["landuse"="forest"]["type"="multipolygon"];relation["natural"="wood"]["type"="multipolygon"]',
 };
 
 // Public Overpass instances have no central status page and go down or hit
