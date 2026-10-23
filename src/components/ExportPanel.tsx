@@ -4,6 +4,7 @@ import { useI18n } from '../i18n/I18nContext';
 
 interface ExportPanelProps {
   onExport: (options: ExportOptions) => void;
+  onExportSVG: (options: ExportOptions) => void;
   exportOptions: ExportOptions;
   onExportOptionsChange: (opts: ExportOptions) => void;
   bboxAreaKm2: number;
@@ -11,7 +12,7 @@ interface ExportPanelProps {
   hasData: boolean;
 }
 
-const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, exportOptions, onExportOptionsChange, bboxAreaKm2, maxBboxAreaKm2, hasData }) => {
+const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, exportOptions, onExportOptionsChange, bboxAreaKm2, maxBboxAreaKm2, hasData }) => {
   const { t } = useI18n();
   const { scale, paperSize, orientation } = exportOptions;
   const areaTooLarge = bboxAreaKm2 > maxBboxAreaKm2;
@@ -97,9 +98,20 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, exportOptions, onEx
       </div>
       <div style={{ height: 14 }} />
       {hasData ? (
-        <button className="qsp-btn" type="submit">
-          {t('exportButton')}
-        </button>
+        <>
+          <button className="qsp-btn" type="submit">
+            {t('exportButton')}
+          </button>
+          <button
+            className="qsp-btn qsp-btn--secondary"
+            type="button"
+            style={{ marginTop: 8 }}
+            onClick={() => onExportSVG(exportOptions)}
+            title={t('exportSvgHint')}
+          >
+            {t('exportSvgButton')}
+          </button>
+        </>
       ) : (
         <div className="qsp-field__hint">{t('exportHintNoData')}</div>
       )}

@@ -11,8 +11,9 @@ import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 import { PresetKey, StyleMap, LayerStyle, STYLE_PRESETS, cloneStyleMap } from './utils/exportStyles';
 import { LAYER_LABEL_KEYS } from './utils/layerLabels';
+import { prepareExportGeometry, computeScaleBar } from './utils/exportGeometry';
+import { buildExportSvg } from './utils/exportSvg';
 import jsPDF from 'jspdf';
-import proj4 from 'proj4';
 
 const DEFAULT_BBOX: [number, number, number, number] = [13.375, 52.515, 13.405, 52.525]; // Berlin example
 const DEFAULT_STYLES = [
@@ -166,62 +167,12 @@ const AppInner: React.FC = () => {
         const inset = 10;
         const pageW = doc.internal.pageSize.getWidth();
         const pageH = doc.internal.pageSize.getHeight();
-        const drawW = pageW;
-        const drawH = pageH;
         // Scales fixed-size elements (arrow, scale bar, fonts) relative to
         // A4, so they stay legible — not comically tiny — on A0 and not
         // oversized on custom small formats.
         const pageScale = Math.min(2.2, Math.max(0.6, Math.sqrt((pageW * pageH) / (210 * 297))));
-        // Use the user bbox (from state) for export area
-        const [bboxMinLon, bboxMinLat, bboxMaxLon, bboxMaxLat] = bbox;
-        // True ground size of the bbox (equirectangular approximation, same
-        // as used elsewhere in the app) — used for the scale bar. Web
-        // Mercator's coordinate span is NOT true ground distance away from
-        // the equator (it's inflated by 1/cos(latitude) — e.g. ~64% at
-        // Berlin's latitude), so it must never be read as "meters" directly.
-        const centerLatForDist = (bboxMinLat + bboxMaxLat) / 2;
-        const metersPerDegLonTrue = 40075000 * Math.cos(centerLatForDist * Math.PI / 180) / 360;
-        const trueWidthMeters = Math.abs(bboxMaxLon - bboxMinLon) * metersPerDegLonTrue;
-        // Project all bbox corners to Web Mercator (EPSG:3857) — this is
-        // only for laying out feature geometry on the page (Mercator is
-        // conformal, so shapes/angles stay correct over a small area); it
-        // is never used as a source of real-world distance.
-        const mercatorProj = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs';
-        const projectToMerc = (coord: number[]): [number, number] => proj4('EPSG:4326', mercatorProj, coord) as [number, number];
-        const bboxCorners: [number, number][] = [
-          [bboxMinLon, bboxMinLat],
-          [bboxMinLon, bboxMaxLat],
-          [bboxMaxLon, bboxMaxLat],
-          [bboxMaxLon, bboxMinLat],
-        ];
-        const bboxMerc = bboxCorners.map(projectToMerc);
-        // Find Mercator bbox min/max
-        const xs = bboxMerc.map((coord) => coord[0]);
-        const ys = bboxMerc.map((coord) => coord[1]);
-        const minX = Math.min.apply(null, xs);
-        const maxX = Math.max.apply(null, xs);
-        const minY = Math.min.apply(null, ys);
-        const maxY = Math.max.apply(null, ys);
-        // Center crop: determine visible bbox in Mercator
-        // Use the projected bbox as the export area (no cropping)
-        const cropMinX = minX, cropMaxX = maxX, cropMinY = minY, cropMaxY = maxY;
-        // Project Mercator to PDF coords
-        const project = ([lon, lat]: [number, number]): [number, number] => {
-          const [x, y] = projectToMerc([lon, lat]);
-          // Only draw features within the export rectangle
-          if (x < cropMinX || x > cropMaxX || y < cropMinY || y > cropMaxY) return [NaN, NaN];
-          const px = ((x - cropMinX) / (cropMaxX - cropMinX)) * drawW;
-          // PDF y=0 is top, so invert y
-          const py = drawH - ((y - cropMinY) / (cropMaxY - cropMinY)) * drawH;
-          return [px, py];
-        };
-        // Split features by type, only export selectedTypes
-        const water = features.filter(f => selectedTypes.includes('water') && (f.properties && (f.properties.waterway || f.properties.natural === 'water')));
-        const streets = features.filter(f => selectedTypes.includes('streets') && (f.properties && f.properties.highway));
-        const buildings = features.filter(f => selectedTypes.includes('buildings') && (f.properties && f.properties.building));
-        const railways = features.filter(f => selectedTypes.includes('railways') && (f.properties && f.properties.railway === 'rail'));
-        const trees = features.filter(f => selectedTypes.includes('trees') && (f.properties && f.properties.natural === 'tree'));
-        const greenery = features.filter(f => selectedTypes.includes('greenery') && (f.properties && (f.properties.landuse === 'forest' || f.properties.landuse === 'grass' || f.properties.landuse === 'meadow' || f.properties.landuse === 'orchard' || f.properties.landuse === 'vineyard' || f.properties.landuse === 'farmland' || f.properties.landuse === 'allotments' || f.properties.leisure === 'park' || f.properties.leisure === 'garden' || f.properties.leisure === 'nature_reserve' || f.properties.natural === 'wood' || f.properties.natural === 'scrub' || f.properties.natural === 'grassland' || f.properties.natural === 'heath')));
+        const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, features, selectedTypes, pageW, pageH);
+        const { water = [], streets = [], buildings = [], railways = [], trees = [], greenery = [] } = categories;
 
         // Draw each category using its configured style (color, line width,
         // fill, dash pattern — from the selected preset or custom edits).
@@ -305,16 +256,7 @@ const AppInner: React.FC = () => {
         // --- Draw scale bar ---
         // Choose a nice round scale bar length (in true ground meters, not
         // Web Mercator units — see note above).
-        const scaleBarLengths = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-        // True meters per PDF mm, derived from the bbox's real-world width
-        // and the full page width it's stretched across (drawW).
-        const metersPerPdfUnit = trueWidthMeters / drawW;
-        // Pick a scale bar length that fits 1/4 of the width
-        let scaleBarLength = scaleBarLengths[0];
-        for (const l of scaleBarLengths) {
-          if (l < trueWidthMeters / 4) scaleBarLength = l;
-        }
-        const scaleBarPx = scaleBarLength / metersPerPdfUnit;
+        const { length: scaleBarLength, px: scaleBarPx } = computeScaleBar(trueWidthMeters, pageW);
         // Draw scale bar at bottom left
         const barX = inset + 12 * pageScale;
         const barY = pageH - inset - 24 * pageScale;
@@ -353,6 +295,34 @@ const AppInner: React.FC = () => {
     }
   };
 
+  // Exports an SVG with one named <g> per feature category (water,
+  // streets, buildings, ...) instead of one flat drawing. Design tools
+  // (Illustrator, Inkscape) import these as real, independently selectable
+  // groups/layers — the jsPDF version in use has no equivalent for PDF
+  // (no support for PDF layers / Optional Content Groups), so this is the
+  // reliable way to get that grouping.
+  const handleExportSVG = (options: ExportOptions) => {
+    try {
+      setExportError(null);
+      if (!osmData || !osmData.elements) return;
+      const [wmm, hmm] = getPaperDimsMm(options);
+      const { features } = osmElementsToGeoJSON(osmData.elements);
+      const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, features, selectedTypes, wmm, hmm);
+      const svg = buildExportSvg({ wmm, hmm, categories, project, layerStyles, trueWidthMeters, exportOptions: options });
+      const blob = new Blob([svg], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'siteplan-export.svg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(t('errorExportFailed'));
+    }
+  };
+
   const currentAreaKm2 = bboxAreaKm2(bbox);
 
   return (
@@ -383,6 +353,7 @@ const AppInner: React.FC = () => {
         exportOptions={exportOptions}
         setExportOptions={setExportOptions}
         handleExport={handleExport}
+        handleExportSVG={handleExportSVG}
         onFetch={() => setFetchRequested(true)}
         stylePreset={stylePreset}
         onStylePresetChange={applyStylePreset}

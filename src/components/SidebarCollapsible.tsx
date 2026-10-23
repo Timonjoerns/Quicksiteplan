@@ -23,6 +23,7 @@ interface SidebarCollapsibleProps {
   exportOptions: ExportOptions;
   setExportOptions: (opts: ExportOptions) => void;
   handleExport: (opts: ExportOptions) => void;
+  handleExportSVG: (opts: ExportOptions) => void;
   onFetch: () => void;
   stylePreset: PresetKey;
   onStylePresetChange: (preset: PresetKey) => void;
@@ -31,7 +32,7 @@ interface SidebarCollapsibleProps {
 }
 
 const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
-  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, onFetch,
+  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, handleExportSVG, onFetch,
   stylePreset, onStylePresetChange, layerStyles, onLayerStyleChange,
 }) => {
   const { t, lang, setLang } = useI18n();
@@ -84,6 +85,7 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
           <div className="qsp-section__body">
             <ExportPanel
               onExport={handleExport}
+              onExportSVG={handleExportSVG}
               exportOptions={exportOptions}
               onExportOptionsChange={setExportOptions}
               bboxAreaKm2={bboxAreaKm2}

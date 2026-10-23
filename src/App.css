@@ -313,9 +313,19 @@
   transition: background 0.12s ease, color 0.12s ease;
 }
 
+.qsp-btn--secondary {
+  background: var(--qsp-paper);
+  color: var(--qsp-ink);
+}
+
 .qsp-btn:hover {
   background: var(--qsp-paper);
   color: var(--qsp-ink);
+}
+
+.qsp-btn--secondary:hover {
+  background: var(--qsp-ink);
+  color: var(--qsp-paper);
 }
 
 .qsp-btn:disabled {

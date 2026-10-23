@@ -30,6 +30,8 @@ export interface Dictionary {
 
   exportAreaHint: string;
   exportButton: string;
+  exportSvgButton: string;
+  exportSvgHint: string;
   exportHintNoData: string;
 
   styleTitle: string;
@@ -85,6 +87,8 @@ export const dictionaries: Record<Lang, Dictionary> = {
 
     exportAreaHint: 'Export area: {area} km² (max {max} km²)',
     exportButton: 'Export as PDF',
+    exportSvgButton: 'Export as SVG',
+    exportSvgHint: 'Each layer (water, streets, buildings, ...) as a separate named group — ideal for Illustrator/Inkscape.',
     exportHintNoData: 'Fetch OSM data first to enable export.',
 
     styleTitle: 'Style',
@@ -138,6 +142,8 @@ export const dictionaries: Record<Lang, Dictionary> = {
 
     exportAreaHint: 'Exportfläche: {area} km² (max. {max} km²)',
     exportButton: 'Als PDF exportieren',
+    exportSvgButton: 'Als SVG exportieren',
+    exportSvgHint: 'Jede Ebene (Gewässer, Straßen, Gebäude, ...) als eigene benannte Gruppe — ideal für Illustrator/Inkscape.',
     exportHintNoData: 'Zuerst OSM-Daten abrufen, um den Export freizuschalten.',
 
     styleTitle: 'Stil',
