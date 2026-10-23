@@ -109,7 +109,7 @@ export const dictionaries: Record<Lang, Dictionary> = {
     lineWidthLabel: 'Line width (mm)',
 
     loadingText: 'Loading OSM data…',
-    loadingTextProgress: 'Loading layers… {done}/{total}',
+    loadingTextProgress: 'Loading data… {done}/{total} requests',
     errorAreaTooLarge: 'Export area is too large (max {max} km²). Zoom in or reduce the scale.',
     errorFetchFailed: 'Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.',
     errorPartialFetch: 'Loaded, but these layers failed: {layers}. Try fetching again.',
@@ -168,7 +168,7 @@ export const dictionaries: Record<Lang, Dictionary> = {
     lineWidthLabel: 'Linienstärke (mm)',
 
     loadingText: 'OSM-Daten werden geladen…',
-    loadingTextProgress: 'Ebenen werden geladen… {done}/{total}',
+    loadingTextProgress: 'Daten werden geladen… {done}/{total} Abfragen',
     errorAreaTooLarge: 'Exportfläche zu groß (max. {max} km²). Zoomen Sie hinein oder verringern Sie den Maßstab.',
     errorFetchFailed: 'OSM-Daten konnten nicht geladen werden. Der Server ist evtl. ausgelastet — versuchen Sie es gleich erneut.',
     errorPartialFetch: 'Geladen, aber diese Ebenen sind fehlgeschlagen: {layers}. Bitte erneut abrufen.',

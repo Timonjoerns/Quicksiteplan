@@ -80,27 +80,66 @@ export interface FetchResult {
 // commonly cap concurrent requests per client and reject the rest outright,
 // so firing them all at once can make every single one fail. A failed layer
 // doesn't block the others; whatever succeeded is still returned.
+// Areas bigger than one tile are split into a grid of tiles of about
+// TILE_SIZE_KM per side, each fetched as its own request — a single
+// Overpass query for a large, dense area runs into the server's time and
+// memory limits and fails outright, while small tiles stay well inside.
+const TILE_SIZE_KM = 4;
+
+function splitBbox(bbox: [number, number, number, number]): [number, number, number, number][] {
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+  const centerLat = (minLat + maxLat) / 2;
+  const widthKm = (maxLon - minLon) * 111.32 * Math.cos(centerLat * Math.PI / 180);
+  const heightKm = (maxLat - minLat) * 110.57;
+  const nx = Math.max(1, Math.ceil(widthKm / TILE_SIZE_KM));
+  const ny = Math.max(1, Math.ceil(heightKm / TILE_SIZE_KM));
+  const tiles: [number, number, number, number][] = [];
+  for (let iy = 0; iy < ny; iy++) {
+    for (let ix = 0; ix < nx; ix++) {
+      tiles.push([
+        minLon + ((maxLon - minLon) * ix) / nx,
+        minLat + ((maxLat - minLat) * iy) / ny,
+        minLon + ((maxLon - minLon) * (ix + 1)) / nx,
+        minLat + ((maxLat - minLat) * (iy + 1)) / ny,
+      ]);
+    }
+  }
+  return tiles;
+}
+
 export async function fetchOsmData(
   bbox: [number, number, number, number],
   types: OSMFeatureType[],
   options?: { signal?: AbortSignal; onProgress?: (p: FetchProgress) => void }
 ): Promise<FetchResult> {
-  const bboxStr = `${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]}`;
-  const total = types.length;
+  const tiles = splitBbox(bbox);
+  const total = types.length * tiles.length;
   const elements: any[] = [];
+  // Features crossing a tile edge come back from every tile they touch.
+  const seen = new Set<string>();
   const failedLayers: OSMFeatureType[] = [];
+  let done = 0;
 
-  for (let i = 0; i < types.length; i++) {
-    const type = types[i];
-    try {
-      const layerElements = await fetchLayer(type, bboxStr, options?.signal);
-      elements.push(...layerElements);
-      options?.onProgress?.({ done: i + 1, total, layer: type, failed: false });
-    } catch (err: any) {
-      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') throw err;
-      failedLayers.push(type);
-      options?.onProgress?.({ done: i + 1, total, layer: type, failed: true });
+  for (const type of types) {
+    let layerFailed = false;
+    for (const [minLon, minLat, maxLon, maxLat] of tiles) {
+      const bboxStr = `${minLat},${minLon},${maxLat},${maxLon}`;
+      try {
+        const tileElements = await fetchLayer(type, bboxStr, options?.signal);
+        for (const el of tileElements) {
+          const key = `${el.type}/${el.id}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          elements.push(el);
+        }
+      } catch (err: any) {
+        if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') throw err;
+        layerFailed = true;
+      }
+      done++;
+      options?.onProgress?.({ done, total, layer: type, failed: layerFailed });
     }
+    if (layerFailed) failedLayers.push(type);
   }
 
   if (elements.length === 0 && failedLayers.length > 0) {

@@ -22,7 +22,10 @@ const DEFAULT_STYLES = [
 
 // Above this, an Overpass query risks timing out and the browser risks
 // choking on rendering/exporting too many features.
-const MAX_BBOX_AREA_KM2 = 25;
+// Larger areas are fetched in tiles (see overpass.ts); this cap keeps the
+// number of requests, the download time and the browser's memory for map
+// preview and export reasonable.
+const MAX_BBOX_AREA_KM2 = 150;
 
 function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, number]): number {
   const metersPerDegLat = 111320;
@@ -60,7 +63,7 @@ const AppInner: React.FC = () => {
 
     setLoading(true);
     setError(null);
-    setLoadingProgress({ done: 0, total: selectedTypes.length });
+    setLoadingProgress(null);
     fetchOsmData(bbox, selectedTypes, {
       signal: controller.signal,
       onProgress: (p) => {
