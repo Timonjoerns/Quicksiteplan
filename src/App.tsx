@@ -9,7 +9,8 @@ import { fetchOsmData } from './utils/overpass';
 import { osmElementsToGeoJSON } from './utils/osmToGeoJSON';
 import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
-import type { Dictionary } from './i18n/translations';
+import { PresetKey, StyleMap, LayerStyle, STYLE_PRESETS, cloneStyleMap } from './utils/exportStyles';
+import { LAYER_LABEL_KEYS } from './utils/layerLabels';
 import jsPDF from 'jspdf';
 import proj4 from 'proj4';
 
@@ -30,15 +31,6 @@ function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, 
   const heightKm = Math.abs(maxLat - minLat) * metersPerDegLat / 1000;
   return widthKm * heightKm;
 }
-
-const LAYER_LABEL_KEYS: Record<OSMFeatureType, keyof Dictionary> = {
-  water: 'layerWater',
-  streets: 'layerStreets',
-  buildings: 'layerBuildings',
-  railways: 'layerRailways',
-  trees: 'layerTrees',
-  greenery: 'layerGreenery',
-};
 
 const AppInner: React.FC = () => {
   const { t } = useI18n();
@@ -98,6 +90,17 @@ const AppInner: React.FC = () => {
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   const [exportOptions, setExportOptions] = useState<ExportOptions>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
+  const [stylePreset, setStylePreset] = useState<PresetKey>('default');
+  const [layerStyles, setLayerStyles] = useState<StyleMap>(() => cloneStyleMap(STYLE_PRESETS.default));
+
+  const applyStylePreset = useCallback((preset: PresetKey) => {
+    setStylePreset(preset);
+    setLayerStyles(cloneStyleMap(STYLE_PRESETS[preset]));
+  }, []);
+
+  const updateLayerStyle = useCallback((type: OSMFeatureType, patch: Partial<LayerStyle>) => {
+    setLayerStyles(prev => ({ ...prev, [type]: { ...prev[type], ...patch } }));
+  }, []);
 
   // Helper: set bbox to match paper size/orientation/scale, centered on current bbox center.
   // Uses the functional setState form (reads previous bbox via its callback,
@@ -137,112 +140,113 @@ const AppInner: React.FC = () => {
     setExportOptions(prev => ({ ...prev, ...patch }));
   }, []);
 
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const handleExport = async (options: ExportOptions) => {
-    const [wmm, hmm] = getPaperDimsMm(options);
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: [wmm, hmm],
-    });
-    // Draw OSM features as vector lines, using UTM projection for true metric scaling
-    if (osmData && osmData.elements) {
-      const { features } = osmElementsToGeoJSON(osmData.elements);
-      // PDF drawing area
-      const margin = 10;
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      const drawW = pageW - 2 * margin;
-      const drawH = pageH - 2 * margin;
-      // Use the user bbox (from state) for export area
-      const [bboxMinLon, bboxMinLat, bboxMaxLon, bboxMaxLat] = bbox;
-      // Project all bbox corners to Web Mercator (EPSG:3857)
-      const mercatorProj = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs';
-      const projectToMerc = (coord: number[]): [number, number] => proj4('EPSG:4326', mercatorProj, coord) as [number, number];
-      const bboxCorners: [number, number][] = [
-        [bboxMinLon, bboxMinLat],
-        [bboxMinLon, bboxMaxLat],
-        [bboxMaxLon, bboxMaxLat],
-        [bboxMaxLon, bboxMinLat],
-      ];
-      const bboxMerc = bboxCorners.map(projectToMerc);
-      // Find Mercator bbox min/max
-      const xs = bboxMerc.map((coord) => coord[0]);
-      const ys = bboxMerc.map((coord) => coord[1]);
-      const minX = Math.min.apply(null, xs);
-      const maxX = Math.max.apply(null, xs);
-      const minY = Math.min.apply(null, ys);
-      const maxY = Math.max.apply(null, ys);
-      // Center crop: determine visible bbox in Mercator
-      // Use the projected bbox as the export area (no cropping)
-      const cropMinX = minX, cropMaxX = maxX, cropMinY = minY, cropMaxY = maxY;
-      // Project Mercator to PDF coords
-      const project = ([lon, lat]: [number, number]): [number, number] => {
-        const [x, y] = projectToMerc([lon, lat]);
-        // Only draw features within the export rectangle
-        if (x < cropMinX || x > cropMaxX || y < cropMinY || y > cropMaxY) return [NaN, NaN];
-        const px = margin + ((x - cropMinX) / (cropMaxX - cropMinX)) * drawW;
-        // PDF y=0 is top, so invert y
-        const py = margin + drawH - ((y - cropMinY) / (cropMaxY - cropMinY)) * drawH;
-        return [px, py];
-      };
-      // Split features by type, only export selectedTypes
-      const water = features.filter(f => selectedTypes.includes('water') && (f.properties && (f.properties.waterway || f.properties.natural === 'water')));
-      const streets = features.filter(f => selectedTypes.includes('streets') && (f.properties && f.properties.highway));
-      const buildings = features.filter(f => selectedTypes.includes('buildings') && (f.properties && f.properties.building));
-      const trees = features.filter(f => selectedTypes.includes('trees') && (f.properties && f.properties.natural === 'tree'));
-      const greenery = features.filter(f => selectedTypes.includes('greenery') && (f.properties && (f.properties.landuse === 'forest' || f.properties.landuse === 'grass' || f.properties.landuse === 'meadow' || f.properties.landuse === 'orchard' || f.properties.landuse === 'vineyard' || f.properties.landuse === 'farmland' || f.properties.landuse === 'allotments' || f.properties.leisure === 'park' || f.properties.leisure === 'garden' || f.properties.leisure === 'nature_reserve' || f.properties.natural === 'wood' || f.properties.natural === 'scrub' || f.properties.natural === 'grassland' || f.properties.natural === 'heath')));
-      // Draw each category in its color
-      const drawCategory = (cat: GeoJSON.Feature[], color: [number, number, number], fill = false, fillOpacity = 0.3) => {
-        doc.setDrawColor(...color);
-        doc.setLineWidth(0.7);
-        if (fill) {
-          doc.setFillColor(color[0], color[1], color[2]);
-        }
-        cat.forEach(f => {
-          if (f.geometry.type === 'LineString') {
-            const coords = f.geometry.coordinates as [number, number][];
-            const projected = coords.map(project);
-            if (projected.length > 1 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
-              let started = false;
-              projected.forEach(([x, y]) => {
-                if (isNaN(x) || isNaN(y)) return;
-                if (!started) {
-                  doc.moveTo(x, y);
-                  started = true;
-                } else {
-                  doc.lineTo(x, y);
-                }
-              });
-              if (started) doc.stroke();
-            }
-          } else if (f.geometry.type === 'Polygon') {
-            const rings = f.geometry.coordinates as [number, number][][];
-            const outerRing = rings[0];
-            const projected = outerRing.map(project);
-            if (projected.length > 2 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
-              const validPoints = projected.filter(([x, y]) => !isNaN(x) && !isNaN(y));
-              if (validPoints.length > 2) {
-                // Draw filled polygon
-                if (fill) {
-                  doc.setFillColor(color[0], color[1], color[2]);
-                  // Draw polygon path
-                  validPoints.forEach(([x, y], i) => {
-                    if (i === 0) doc.moveTo(x, y);
-                    else doc.lineTo(x, y);
-                  });
-                  // Close and fill
-                  doc.lineTo(validPoints[0][0], validPoints[0][1]);
-                  doc.fill();
-                  // Draw outline
-                  doc.setDrawColor(...color);
-                  validPoints.forEach(([x, y], i) => {
-                    if (i === 0) doc.moveTo(x, y);
-                    else doc.lineTo(x, y);
-                  });
-                  doc.lineTo(validPoints[0][0], validPoints[0][1]);
-                  doc.stroke();
-                } else {
-                  // Draw outline only
+    try {
+      setExportError(null);
+      const [wmm, hmm] = getPaperDimsMm(options);
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [wmm, hmm],
+      });
+      // Draw OSM features as vector lines, using Web Mercator for true metric scaling
+      if (osmData && osmData.elements) {
+        const { features } = osmElementsToGeoJSON(osmData.elements);
+        // PDF drawing area
+        const margin = 10;
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const drawW = pageW - 2 * margin;
+        const drawH = pageH - 2 * margin;
+        // Scales fixed-size elements (arrow, scale bar, fonts) relative to
+        // A4, so they stay legible — not comically tiny — on A0 and not
+        // oversized on custom small formats.
+        const pageScale = Math.min(2.2, Math.max(0.6, Math.sqrt((pageW * pageH) / (210 * 297))));
+        // Use the user bbox (from state) for export area
+        const [bboxMinLon, bboxMinLat, bboxMaxLon, bboxMaxLat] = bbox;
+        // Project all bbox corners to Web Mercator (EPSG:3857)
+        const mercatorProj = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs';
+        const projectToMerc = (coord: number[]): [number, number] => proj4('EPSG:4326', mercatorProj, coord) as [number, number];
+        const bboxCorners: [number, number][] = [
+          [bboxMinLon, bboxMinLat],
+          [bboxMinLon, bboxMaxLat],
+          [bboxMaxLon, bboxMaxLat],
+          [bboxMaxLon, bboxMinLat],
+        ];
+        const bboxMerc = bboxCorners.map(projectToMerc);
+        // Find Mercator bbox min/max
+        const xs = bboxMerc.map((coord) => coord[0]);
+        const ys = bboxMerc.map((coord) => coord[1]);
+        const minX = Math.min.apply(null, xs);
+        const maxX = Math.max.apply(null, xs);
+        const minY = Math.min.apply(null, ys);
+        const maxY = Math.max.apply(null, ys);
+        // Center crop: determine visible bbox in Mercator
+        // Use the projected bbox as the export area (no cropping)
+        const cropMinX = minX, cropMaxX = maxX, cropMinY = minY, cropMaxY = maxY;
+        // Project Mercator to PDF coords
+        const project = ([lon, lat]: [number, number]): [number, number] => {
+          const [x, y] = projectToMerc([lon, lat]);
+          // Only draw features within the export rectangle
+          if (x < cropMinX || x > cropMaxX || y < cropMinY || y > cropMaxY) return [NaN, NaN];
+          const px = margin + ((x - cropMinX) / (cropMaxX - cropMinX)) * drawW;
+          // PDF y=0 is top, so invert y
+          const py = margin + drawH - ((y - cropMinY) / (cropMaxY - cropMinY)) * drawH;
+          return [px, py];
+        };
+        // Split features by type, only export selectedTypes
+        const water = features.filter(f => selectedTypes.includes('water') && (f.properties && (f.properties.waterway || f.properties.natural === 'water')));
+        const streets = features.filter(f => selectedTypes.includes('streets') && (f.properties && f.properties.highway));
+        const buildings = features.filter(f => selectedTypes.includes('buildings') && (f.properties && f.properties.building));
+        const railways = features.filter(f => selectedTypes.includes('railways') && (f.properties && f.properties.railway === 'rail'));
+        const trees = features.filter(f => selectedTypes.includes('trees') && (f.properties && f.properties.natural === 'tree'));
+        const greenery = features.filter(f => selectedTypes.includes('greenery') && (f.properties && (f.properties.landuse === 'forest' || f.properties.landuse === 'grass' || f.properties.landuse === 'meadow' || f.properties.landuse === 'orchard' || f.properties.landuse === 'vineyard' || f.properties.landuse === 'farmland' || f.properties.landuse === 'allotments' || f.properties.leisure === 'park' || f.properties.leisure === 'garden' || f.properties.leisure === 'nature_reserve' || f.properties.natural === 'wood' || f.properties.natural === 'scrub' || f.properties.natural === 'grassland' || f.properties.natural === 'heath')));
+
+        // Draw each category using its configured style (color, line width,
+        // fill, dash pattern — from the selected preset or custom edits).
+        const drawCategory = (cat: GeoJSON.Feature[], style: LayerStyle) => {
+          const { color, lineWidth, fill, fillOpacity, dash } = style;
+          doc.setDrawColor(...color);
+          doc.setLineWidth(lineWidth);
+          doc.setLineDashPattern(dash ?? [], 0);
+          if (fill) doc.setFillColor(color[0], color[1], color[2]);
+
+          cat.forEach(f => {
+            if (f.geometry.type === 'LineString') {
+              const coords = f.geometry.coordinates as [number, number][];
+              const projected = coords.map(project);
+              if (projected.length > 1 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
+                let started = false;
+                projected.forEach(([x, y]) => {
+                  if (isNaN(x) || isNaN(y)) return;
+                  if (!started) {
+                    doc.moveTo(x, y);
+                    started = true;
+                  } else {
+                    doc.lineTo(x, y);
+                  }
+                });
+                if (started) doc.stroke();
+              }
+            } else if (f.geometry.type === 'Polygon') {
+              const rings = f.geometry.coordinates as [number, number][][];
+              const outerRing = rings[0];
+              const projected = outerRing.map(project);
+              if (projected.length > 2 && projected.some(([x, y]) => !isNaN(x) && !isNaN(y))) {
+                const validPoints = projected.filter(([x, y]) => !isNaN(x) && !isNaN(y));
+                if (validPoints.length > 2) {
+                  if (fill) {
+                    if (fillOpacity < 1) doc.setGState(new (doc as any).GState({ opacity: fillOpacity }));
+                    validPoints.forEach(([x, y], i) => {
+                      if (i === 0) doc.moveTo(x, y);
+                      else doc.lineTo(x, y);
+                    });
+                    doc.lineTo(validPoints[0][0], validPoints[0][1]);
+                    doc.fill();
+                    if (fillOpacity < 1) doc.setGState(new (doc as any).GState({ opacity: 1 }));
+                  }
                   validPoints.forEach(([x, y], i) => {
                     if (i === 0) doc.moveTo(x, y);
                     else doc.lineTo(x, y);
@@ -252,69 +256,81 @@ const AppInner: React.FC = () => {
                 }
               }
             }
-          }
-        });
-      };
-      // Draw trees as small circles
-      const drawTrees = (treeFeatures: GeoJSON.Feature[], color: [number, number, number]) => {
-        doc.setDrawColor(...color);
-        doc.setFillColor(color[0], color[1], color[2]);
-        treeFeatures.forEach(f => {
-          if (f.geometry.type === 'Point') {
-            const coords = f.geometry.coordinates as [number, number];
-            const [px, py] = project(coords);
-            if (!isNaN(px) && !isNaN(py)) {
-              doc.circle(px, py, 0.8, 'F'); // Small filled circle for tree
+          });
+          doc.setLineDashPattern([], 0);
+        };
+        // Draw trees as small circles
+        const drawTrees = (treeFeatures: GeoJSON.Feature[], style: LayerStyle) => {
+          doc.setDrawColor(...style.color);
+          doc.setFillColor(style.color[0], style.color[1], style.color[2]);
+          treeFeatures.forEach(f => {
+            if (f.geometry.type === 'Point') {
+              const coords = f.geometry.coordinates as [number, number];
+              const [px, py] = project(coords);
+              if (!isNaN(px) && !isNaN(py)) {
+                doc.circle(px, py, style.pointRadius ?? 0.8, 'F');
+              }
             }
-          }
-        });
-      };
-      // Draw in correct order: greenery (fill), water, streets, buildings, trees
-      drawCategory(greenery, [144, 238, 144], true); // light green with fill
-      drawCategory(water, [51, 153, 255]); // blue
-      drawCategory(streets, [255, 102, 0]); // orange
-      drawCategory(buildings, [136, 136, 136]); // gray
-      drawTrees(trees, [34, 139, 34]); // forest green
-      // --- Draw scale bar ---
-      // Choose a nice round scale bar length (in meters)
-      const scaleBarLengths = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-      const bboxWidthMeters = cropMaxX - cropMinX;
-      // How many meters per PDF point (drawW is in PDF units)
-      const metersPerPdfUnit = bboxWidthMeters / drawW;
-      // Pick a scale bar length that fits 1/4 of the width
-      let scaleBarLength = scaleBarLengths[0];
-      for (const l of scaleBarLengths) {
-        if (l < bboxWidthMeters / 4) scaleBarLength = l;
-      }
-      const scaleBarPx = scaleBarLength / metersPerPdfUnit;
-      // Draw scale bar at bottom left
-      const barX = margin + 12;
-      const barY = pageH - margin - 24;
-      doc.setDrawColor(26, 26, 26);
-      doc.setLineWidth(1);
-      doc.line(barX, barY, barX + scaleBarPx, barY);
-      doc.line(barX, barY - 3, barX, barY + 3);
-      doc.line(barX + scaleBarPx, barY - 3, barX + scaleBarPx, barY + 3);
-      doc.setFontSize(10);
-      doc.text(`${scaleBarLength} m`, barX + scaleBarPx / 2, barY - 4, { align: 'center' });
+          });
+        };
+        // Draw in the same stacking order as the map preview: greenery
+        // (fill) below everything, then water, railways, streets,
+        // buildings, trees on top.
+        drawCategory(greenery, layerStyles.greenery);
+        drawCategory(water, layerStyles.water);
+        drawCategory(railways, layerStyles.railways);
+        drawCategory(streets, layerStyles.streets);
+        drawCategory(buildings, layerStyles.buildings);
+        drawTrees(trees, layerStyles.trees);
 
-      // --- Draw north arrow ---
-      // Place at top left
-      const arrowX = margin + 24;
-      const arrowY = margin + 32;
-      const arrowLen = 18;
-      // Arrow shaft
-      doc.setDrawColor(26, 26, 26);
-      doc.setLineWidth(1.2);
-      doc.line(arrowX, arrowY, arrowX, arrowY - arrowLen);
-      // Arrow head
-      doc.line(arrowX, arrowY - arrowLen, arrowX - 4, arrowY - arrowLen + 7);
-      doc.line(arrowX, arrowY - arrowLen, arrowX + 4, arrowY - arrowLen + 7);
-      // N label
-      doc.setFontSize(12);
-      doc.text('N', arrowX, arrowY - arrowLen - 4, { align: 'center' });
+        // --- Draw scale bar ---
+        // Choose a nice round scale bar length (in meters)
+        const scaleBarLengths = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+        const bboxWidthMeters = cropMaxX - cropMinX;
+        // How many meters per PDF point (drawW is in PDF units)
+        const metersPerPdfUnit = bboxWidthMeters / drawW;
+        // Pick a scale bar length that fits 1/4 of the width
+        let scaleBarLength = scaleBarLengths[0];
+        for (const l of scaleBarLengths) {
+          if (l < bboxWidthMeters / 4) scaleBarLength = l;
+        }
+        const scaleBarPx = scaleBarLength / metersPerPdfUnit;
+        // Draw scale bar at bottom left
+        const barX = margin + 12 * pageScale;
+        const barY = pageH - margin - 24 * pageScale;
+        doc.setDrawColor(26, 26, 26);
+        doc.setLineDashPattern([], 0);
+        doc.setLineWidth(pageScale);
+        doc.line(barX, barY, barX + scaleBarPx, barY);
+        doc.line(barX, barY - 3 * pageScale, barX, barY + 3 * pageScale);
+        doc.line(barX + scaleBarPx, barY - 3 * pageScale, barX + scaleBarPx, barY + 3 * pageScale);
+        doc.setFontSize(10 * pageScale);
+        doc.text(`${scaleBarLength} m`, barX + scaleBarPx / 2, barY - 4 * pageScale, { align: 'center' });
+
+        // --- Draw north arrow ---
+        // Place at top left
+        const arrowX = margin + 24 * pageScale;
+        const arrowY = margin + 32 * pageScale;
+        const arrowLen = 18 * pageScale;
+        doc.setDrawColor(26, 26, 26);
+        doc.setLineWidth(1.2 * pageScale);
+        doc.line(arrowX, arrowY, arrowX, arrowY - arrowLen);
+        doc.line(arrowX, arrowY - arrowLen, arrowX - 4 * pageScale, arrowY - arrowLen + 7 * pageScale);
+        doc.line(arrowX, arrowY - arrowLen, arrowX + 4 * pageScale, arrowY - arrowLen + 7 * pageScale);
+        doc.setFontSize(12 * pageScale);
+        doc.text('N', arrowX, arrowY - arrowLen - 4 * pageScale, { align: 'center' });
+
+        // --- Title block: scale, paper size and export date, bottom right ---
+        doc.setFontSize(9 * pageScale);
+        doc.setTextColor(26, 26, 26);
+        const paperLabel = options.paperSize === 'Custom' ? `${Math.round(wmm)}×${Math.round(hmm)} mm` : `${options.paperSize} ${options.orientation}`;
+        const titleLine = `1:${options.scale.toLocaleString()}  ·  ${paperLabel}  ·  ${new Date().toLocaleDateString()}`;
+        doc.text(titleLine, pageW - margin, pageH - margin, { align: 'right' });
+      }
+      doc.save('siteplan-export.pdf');
+    } catch (err) {
+      setExportError(t('errorExportFailed'));
     }
-    doc.save('siteplan-export.pdf');
   };
 
   const currentAreaKm2 = bboxAreaKm2(bbox);
@@ -338,6 +354,7 @@ const AppInner: React.FC = () => {
         loading={loading}
         loadingProgress={loadingProgress}
         error={error}
+        exportError={exportError}
         hasData={!!osmData}
         bboxAreaKm2={currentAreaKm2}
         maxBboxAreaKm2={MAX_BBOX_AREA_KM2}
@@ -347,6 +364,10 @@ const AppInner: React.FC = () => {
         setExportOptions={setExportOptions}
         handleExport={handleExport}
         onFetch={() => setFetchRequested(true)}
+        stylePreset={stylePreset}
+        onStylePresetChange={applyStylePreset}
+        layerStyles={layerStyles}
+        onLayerStyleChange={updateLayerStyle}
       />
 
       <div className="qsp-toolbar">

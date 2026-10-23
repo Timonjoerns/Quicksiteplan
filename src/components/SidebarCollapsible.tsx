@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import DataSelector from './DataSelector';
 import ExportPanel from './ExportPanel';
+import StylePanel from './StylePanel';
 import LoadingParticles from './LoadingParticles';
 import { DownloadIcon } from './Icons';
 import { ExportOptions } from '../utils/paperSizes';
+import { PresetKey, StyleMap, LayerStyle } from '../utils/exportStyles';
 import { useI18n } from '../i18n/I18nContext';
 
 import { OSMFeatureType } from './DataSelector';
@@ -12,6 +14,7 @@ interface SidebarCollapsibleProps {
   loading: boolean;
   loadingProgress: { done: number; total: number } | null;
   error: string | null;
+  exportError: string | null;
   hasData: boolean;
   bboxAreaKm2: number;
   maxBboxAreaKm2: number;
@@ -21,14 +24,20 @@ interface SidebarCollapsibleProps {
   setExportOptions: (opts: ExportOptions) => void;
   handleExport: (opts: ExportOptions) => void;
   onFetch: () => void;
+  stylePreset: PresetKey;
+  onStylePresetChange: (preset: PresetKey) => void;
+  layerStyles: StyleMap;
+  onLayerStyleChange: (type: OSMFeatureType, patch: Partial<LayerStyle>) => void;
 }
 
 const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
-  loading, loadingProgress, error, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, onFetch,
+  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, maxBboxAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, onFetch,
+  stylePreset, onStylePresetChange, layerStyles, onLayerStyleChange,
 }) => {
   const { t, lang, setLang } = useI18n();
   const [featuresOpen, setFeaturesOpen] = useState(true);
   const [exportOpen, setExportOpen] = useState(true);
+  const [styleOpen, setStyleOpen] = useState(false);
   const [stepsOpen, setStepsOpen] = useState(false);
 
   return (
@@ -80,6 +89,25 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
               bboxAreaKm2={bboxAreaKm2}
               maxBboxAreaKm2={maxBboxAreaKm2}
               hasData={hasData}
+            />
+            {exportError && <div className="qsp-status qsp-status--error" style={{ margin: '14px 0 0' }}>{exportError}</div>}
+          </div>
+        )}
+      </div>
+
+      <div className="qsp-section">
+        <button type="button" className="qsp-section__head" onClick={() => setStyleOpen(s => !s)} aria-expanded={styleOpen}>
+          <span className="qsp-section__title">{t('styleTitle')}</span>
+          <span className={`qsp-section__chevron${styleOpen ? ' qsp-section__chevron--open' : ''}`}>&#9656;</span>
+        </button>
+        {styleOpen && (
+          <div className="qsp-section__body">
+            <StylePanel
+              selectedTypes={selectedTypes}
+              preset={stylePreset}
+              onPresetChange={onStylePresetChange}
+              layerStyles={layerStyles}
+              onLayerStyleChange={onLayerStyleChange}
             />
           </div>
         )}

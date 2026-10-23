@@ -32,11 +32,21 @@ export interface Dictionary {
   exportButton: string;
   exportHintNoData: string;
 
+  styleTitle: string;
+  stylePresetLabel: string;
+  presetDefault: string;
+  presetBlueprint: string;
+  presetGrayscale: string;
+  presetBold: string;
+  colorLabel: string;
+  lineWidthLabel: string;
+
   loadingText: string;
   loadingTextProgress: string;
   errorAreaTooLarge: string;
   errorFetchFailed: string;
   errorPartialFetch: string;
+  errorExportFailed: string;
 
   step1: string;
   step2: string;
@@ -77,11 +87,21 @@ export const dictionaries: Record<Lang, Dictionary> = {
     exportButton: 'Export as PDF',
     exportHintNoData: 'Fetch OSM data first to enable export.',
 
+    styleTitle: 'Style',
+    stylePresetLabel: 'Preset',
+    presetDefault: 'Default',
+    presetBlueprint: 'Blueprint (mono)',
+    presetGrayscale: 'Grayscale',
+    presetBold: 'Bold',
+    colorLabel: 'Color',
+    lineWidthLabel: 'Line width (mm)',
+
     loadingText: 'Loading OSM data…',
     loadingTextProgress: 'Loading layers… {done}/{total}',
     errorAreaTooLarge: 'Export area is too large (max {max} km²). Zoom in or reduce the scale.',
     errorFetchFailed: 'Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.',
     errorPartialFetch: 'Loaded, but these layers failed: {layers}. Try fetching again.',
+    errorExportFailed: 'PDF export failed. Try again, or fetch the data again first.',
 
     step1: "Drag the dashed frame, or its corners, to position and size your export area — it snaps to DIN paper formats.",
     step2: 'Pick the OSM layers you want and fetch the data in the sidebar.',
@@ -120,11 +140,21 @@ export const dictionaries: Record<Lang, Dictionary> = {
     exportButton: 'Als PDF exportieren',
     exportHintNoData: 'Zuerst OSM-Daten abrufen, um den Export freizuschalten.',
 
+    styleTitle: 'Stil',
+    stylePresetLabel: 'Voreinstellung',
+    presetDefault: 'Standard',
+    presetBlueprint: 'Blaupause (mono)',
+    presetGrayscale: 'Graustufen',
+    presetBold: 'Kräftig',
+    colorLabel: 'Farbe',
+    lineWidthLabel: 'Linienstärke (mm)',
+
     loadingText: 'OSM-Daten werden geladen…',
     loadingTextProgress: 'Ebenen werden geladen… {done}/{total}',
     errorAreaTooLarge: 'Exportfläche zu groß (max. {max} km²). Zoomen Sie hinein oder verringern Sie den Maßstab.',
     errorFetchFailed: 'OSM-Daten konnten nicht geladen werden. Der Server ist evtl. ausgelastet — versuchen Sie es gleich erneut.',
     errorPartialFetch: 'Geladen, aber diese Ebenen sind fehlgeschlagen: {layers}. Bitte erneut abrufen.',
+    errorExportFailed: 'PDF-Export fehlgeschlagen. Erneut versuchen oder die Daten zuerst neu abrufen.',
 
     step1: 'Rahmen oder Eckpunkte ziehen, um die Exportfläche zu positionieren und zu skalieren — er rastet an DIN-Formaten ein.',
     step2: 'Gewünschte OSM-Ebenen wählen und die Daten in der Seitenleiste abrufen.',

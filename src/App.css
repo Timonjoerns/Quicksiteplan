@@ -237,6 +237,60 @@
   font-weight: 600;
 }
 
+/* ---------- Style panel (per-layer color/width) ---------- */
+
+.qsp-style-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.qsp-style-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qsp-style-row__label {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--qsp-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qsp-style-row__swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: var(--qsp-border);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.qsp-style-row__swatch::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.qsp-style-row__swatch::-webkit-color-swatch {
+  border: none;
+}
+
+.qsp-style-row__width {
+  width: 56px;
+  flex-shrink: 0;
+  padding: 5px 6px;
+  border: var(--qsp-border);
+  background: var(--qsp-paper);
+  color: var(--qsp-ink);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+
 /* ---------- Buttons ---------- */
 
 .qsp-btn {
