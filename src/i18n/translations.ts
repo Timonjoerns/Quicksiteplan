@@ -50,6 +50,7 @@ export interface Dictionary {
   loadingText: string;
   loadingTextProgress: string;
   largeAreaWarning: string;
+  treesOmittedHint: string;
   errorFetchFailed: string;
   errorPartialFetch: string;
   errorExportFailed: string;
@@ -110,6 +111,7 @@ export const dictionaries: Record<Lang, Dictionary> = {
 
     loadingText: 'Loading OSM data…',
     loadingTextProgress: 'Loading data… {done}/{total} requests',
+    treesOmittedHint: 'Trees are left out at scales above 1:{max}.',
     largeAreaWarning: 'Large area: loading can take several minutes and exported files get big.',
     errorFetchFailed: 'Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.',
     errorPartialFetch: 'Loaded, but these layers failed: {layers}. Try fetching again.',
@@ -169,6 +171,7 @@ export const dictionaries: Record<Lang, Dictionary> = {
 
     loadingText: 'OSM-Daten werden geladen…',
     loadingTextProgress: 'Daten werden geladen… {done}/{total} Abfragen',
+    treesOmittedHint: 'Bäume werden ab einem Maßstab über 1:{max} weggelassen.',
     largeAreaWarning: 'Große Fläche: Das Laden kann mehrere Minuten dauern, Exportdateien werden groß.',
     errorFetchFailed: 'OSM-Daten konnten nicht geladen werden. Der Server ist evtl. ausgelastet — versuchen Sie es gleich erneut.',
     errorPartialFetch: 'Geladen, aber diese Ebenen sind fehlgeschlagen: {layers}. Bitte erneut abrufen.',

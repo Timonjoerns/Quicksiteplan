@@ -1,6 +1,7 @@
 import React from 'react';
 import { ExportOptions, PAPER_SIZES } from '../utils/paperSizes';
 import { useI18n } from '../i18n/I18nContext';
+import { TREES_MAX_SCALE } from '../utils/overpass';
 
 interface ExportPanelProps {
   onExport: (options: ExportOptions) => void;
@@ -96,6 +97,9 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, export
       <div className="qsp-field__hint">
         {t('exportAreaHint', { area: bboxAreaKm2.toFixed(2) })}
       </div>
+      {scale > TREES_MAX_SCALE && (
+        <div className="qsp-field__hint">{t('treesOmittedHint', { max: TREES_MAX_SCALE.toLocaleString() })}</div>
+      )}
       {largeArea && (
         <div className="qsp-field__hint qsp-field__hint--warn">{t('largeAreaWarning')}</div>
       )}

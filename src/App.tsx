@@ -61,6 +61,7 @@ const AppInner: React.FC = () => {
     setError(null);
     setLoadingProgress(null);
     fetchOsmData(bbox, selectedTypes, {
+      scale: exportOptions.scale,
       signal: controller.signal,
       onProgress: (p) => {
         if (abortControllerRef.current !== controller) return;
@@ -85,7 +86,7 @@ const AppInner: React.FC = () => {
         setLoading(false);
         setLoadingProgress(null);
       });
-  }, [fetchRequested, bbox, selectedTypes, t]);
+  }, [fetchRequested, bbox, selectedTypes, exportOptions.scale, t]);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
 
