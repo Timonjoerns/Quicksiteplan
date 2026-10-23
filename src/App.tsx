@@ -146,27 +146,46 @@ const AppInner: React.FC = () => {
     try {
       setExportError(null);
       const [wmm, hmm] = getPaperDimsMm(options);
+      // Orientation must match the requested w/h, or jsPDF silently swaps
+      // the page back to the opposite shape — stretching everything drawn
+      // into it, since the map math below assumes the requested shape.
       const doc = new jsPDF({
-        orientation: 'portrait',
+        orientation: wmm > hmm ? 'landscape' : 'portrait',
         unit: 'mm',
         format: [wmm, hmm],
       });
       // Draw OSM features as vector lines, using Web Mercator for true metric scaling
       if (osmData && osmData.elements) {
         const { features } = osmElementsToGeoJSON(osmData.elements);
-        // PDF drawing area
-        const margin = 10;
+        // Inset used only for placing the scale bar / north arrow / title
+        // text away from the page edge — NOT for fitting the map content.
+        // The geographic bbox was sized (in App's setPresetBbox) to match
+        // the full page at the requested scale, so the map must fill the
+        // full page too, or the printed scale would drift from what's
+        // stated (previously ~10% off because of exactly this mismatch).
+        const inset = 10;
         const pageW = doc.internal.pageSize.getWidth();
         const pageH = doc.internal.pageSize.getHeight();
-        const drawW = pageW - 2 * margin;
-        const drawH = pageH - 2 * margin;
+        const drawW = pageW;
+        const drawH = pageH;
         // Scales fixed-size elements (arrow, scale bar, fonts) relative to
         // A4, so they stay legible — not comically tiny — on A0 and not
         // oversized on custom small formats.
         const pageScale = Math.min(2.2, Math.max(0.6, Math.sqrt((pageW * pageH) / (210 * 297))));
         // Use the user bbox (from state) for export area
         const [bboxMinLon, bboxMinLat, bboxMaxLon, bboxMaxLat] = bbox;
-        // Project all bbox corners to Web Mercator (EPSG:3857)
+        // True ground size of the bbox (equirectangular approximation, same
+        // as used elsewhere in the app) — used for the scale bar. Web
+        // Mercator's coordinate span is NOT true ground distance away from
+        // the equator (it's inflated by 1/cos(latitude) — e.g. ~64% at
+        // Berlin's latitude), so it must never be read as "meters" directly.
+        const centerLatForDist = (bboxMinLat + bboxMaxLat) / 2;
+        const metersPerDegLonTrue = 40075000 * Math.cos(centerLatForDist * Math.PI / 180) / 360;
+        const trueWidthMeters = Math.abs(bboxMaxLon - bboxMinLon) * metersPerDegLonTrue;
+        // Project all bbox corners to Web Mercator (EPSG:3857) — this is
+        // only for laying out feature geometry on the page (Mercator is
+        // conformal, so shapes/angles stay correct over a small area); it
+        // is never used as a source of real-world distance.
         const mercatorProj = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs';
         const projectToMerc = (coord: number[]): [number, number] => proj4('EPSG:4326', mercatorProj, coord) as [number, number];
         const bboxCorners: [number, number][] = [
@@ -191,9 +210,9 @@ const AppInner: React.FC = () => {
           const [x, y] = projectToMerc([lon, lat]);
           // Only draw features within the export rectangle
           if (x < cropMinX || x > cropMaxX || y < cropMinY || y > cropMaxY) return [NaN, NaN];
-          const px = margin + ((x - cropMinX) / (cropMaxX - cropMinX)) * drawW;
+          const px = ((x - cropMinX) / (cropMaxX - cropMinX)) * drawW;
           // PDF y=0 is top, so invert y
-          const py = margin + drawH - ((y - cropMinY) / (cropMaxY - cropMinY)) * drawH;
+          const py = drawH - ((y - cropMinY) / (cropMaxY - cropMinY)) * drawH;
           return [px, py];
         };
         // Split features by type, only export selectedTypes
@@ -284,20 +303,21 @@ const AppInner: React.FC = () => {
         drawTrees(trees, layerStyles.trees);
 
         // --- Draw scale bar ---
-        // Choose a nice round scale bar length (in meters)
+        // Choose a nice round scale bar length (in true ground meters, not
+        // Web Mercator units — see note above).
         const scaleBarLengths = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-        const bboxWidthMeters = cropMaxX - cropMinX;
-        // How many meters per PDF point (drawW is in PDF units)
-        const metersPerPdfUnit = bboxWidthMeters / drawW;
+        // True meters per PDF mm, derived from the bbox's real-world width
+        // and the full page width it's stretched across (drawW).
+        const metersPerPdfUnit = trueWidthMeters / drawW;
         // Pick a scale bar length that fits 1/4 of the width
         let scaleBarLength = scaleBarLengths[0];
         for (const l of scaleBarLengths) {
-          if (l < bboxWidthMeters / 4) scaleBarLength = l;
+          if (l < trueWidthMeters / 4) scaleBarLength = l;
         }
         const scaleBarPx = scaleBarLength / metersPerPdfUnit;
         // Draw scale bar at bottom left
-        const barX = margin + 12 * pageScale;
-        const barY = pageH - margin - 24 * pageScale;
+        const barX = inset + 12 * pageScale;
+        const barY = pageH - inset - 24 * pageScale;
         doc.setDrawColor(26, 26, 26);
         doc.setLineDashPattern([], 0);
         doc.setLineWidth(pageScale);
@@ -309,8 +329,8 @@ const AppInner: React.FC = () => {
 
         // --- Draw north arrow ---
         // Place at top left
-        const arrowX = margin + 24 * pageScale;
-        const arrowY = margin + 32 * pageScale;
+        const arrowX = inset + 24 * pageScale;
+        const arrowY = inset + 32 * pageScale;
         const arrowLen = 18 * pageScale;
         doc.setDrawColor(26, 26, 26);
         doc.setLineWidth(1.2 * pageScale);
@@ -325,7 +345,7 @@ const AppInner: React.FC = () => {
         doc.setTextColor(26, 26, 26);
         const paperLabel = options.paperSize === 'Custom' ? `${Math.round(wmm)}×${Math.round(hmm)} mm` : `${options.paperSize} ${options.orientation}`;
         const titleLine = `1:${options.scale.toLocaleString()}  ·  ${paperLabel}  ·  ${new Date().toLocaleDateString()}`;
-        doc.text(titleLine, pageW - margin, pageH - margin, { align: 'right' });
+        doc.text(titleLine, pageW - inset, pageH - inset, { align: 'right' });
       }
       doc.save('siteplan-export.pdf');
     } catch (err) {
