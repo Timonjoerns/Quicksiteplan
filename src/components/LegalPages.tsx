@@ -2,20 +2,16 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n/I18nContext';
 
-// ---------------------------------------------------------------------------
-// FILL IN BEFORE PUBLISHING: operator details for the Impressum and the
-// privacy policy. Every [placeholder] below must be replaced.
-// ---------------------------------------------------------------------------
+// Operator details for the Impressum and the privacy policy.
 export const LEGAL_CONTACT = {
-  name: '[Vorname Nachname]',
-  street: '[Straße Hausnummer]',
-  city: '[PLZ Ort]',
+  name: 'Timon Jörns',
+  street: 'Herrenhäuser Straße 8',
+  city: '30419 Hannover',
   country: 'Deutschland',
-  email: '[E-Mail-Adresse]',
-  // competent data protection authority for the operator's federal state,
-  // e.g. "Die Landesbeauftragte für den Datenschutz Niedersachsen"
-  authority: '[Zuständige Datenschutz-Aufsichtsbehörde]',
-  updated: '[Monat Jahr]',
+  email: 'timon@joerns.info',
+  // competent data protection authority for the operator's federal state
+  authority: 'Die Landesbeauftragte für den Datenschutz Niedersachsen, Prinzenstraße 5, 30159 Hannover',
+  updated: 'Oktober 2026',
 };
 
 export type LegalPage = 'imprint' | 'privacy';
