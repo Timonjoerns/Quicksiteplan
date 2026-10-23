@@ -646,7 +646,14 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
     }));
     PREVIEW_SOURCES.forEach(id => {
       const type = id.replace('osm-', '').replace('-areas', '') as OSMFeatureType;
-      map.addSource(id, { type: 'geojson', data: id.endsWith('-areas') ? asAreas(categories[type]) : collection(categories[type] ?? []) });
+      map.addSource(id, {
+        type: 'geojson',
+        data: id.endsWith('-areas') ? asAreas(categories[type]) : collection(categories[type] ?? []),
+        // shown in the map's attribution control while contours are on
+        ...(id === 'osm-contours' && (categories.contours ?? []).length > 0
+          ? { attribution: 'Elevation: AWS Terrain Tiles (Copernicus EU-DEM, NASA SRTM)' }
+          : {}),
+      });
     });
     // below the export frame and its handles, so those stay on top
     const beforeId = map.getLayer('bbox-fill') ? 'bbox-fill' : undefined;

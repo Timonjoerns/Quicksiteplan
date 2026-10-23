@@ -73,6 +73,11 @@ export interface Dictionary {
   step2: string;
   step3: string;
   step4: string;
+
+  disclaimerShort: string;
+  imprintTitle: string;
+  privacyTitle: string;
+  closeLabel: string;
 }
 
 export const dictionaries: Record<Lang, Dictionary> = {
@@ -149,6 +154,10 @@ export const dictionaries: Record<Lang, Dictionary> = {
     step2: 'Pick the OSM layers you want and fetch the data in the sidebar.',
     step3: 'Set scale, paper size and orientation — or choose Custom for your own size.',
     step4: 'Once data has loaded, export your site plan as a PDF.',
+    disclaimerShort: 'Not an official survey map. No guarantee of accuracy or completeness.',
+    imprintTitle: 'Legal Notice',
+    privacyTitle: 'Privacy',
+    closeLabel: 'Close',
   },
   de: {
     tagline: 'OSM-Daten → maßstäblicher Lageplan',
@@ -223,6 +232,10 @@ export const dictionaries: Record<Lang, Dictionary> = {
     step2: 'Gewünschte OSM-Ebenen wählen und die Daten in der Seitenleiste abrufen.',
     step3: 'Maßstab, Papierformat und Ausrichtung festlegen — oder ein eigenes Format wählen.',
     step4: 'Sobald die Daten geladen sind, den Lageplan als PDF exportieren.',
+    disclaimerShort: 'Keine amtliche Vermessungsunterlage. Keine Gewähr für Richtigkeit und Vollständigkeit.',
+    imprintTitle: 'Impressum',
+    privacyTitle: 'Datenschutz',
+    closeLabel: 'Schließen',
   },
 };
 

@@ -2,6 +2,7 @@ import proj4 from 'proj4';
 import { OSMFeatureType } from '../components/DataSelector';
 import { StyleMap } from './exportStyles';
 import { CategoryMap, areaPolygons, simplifyPts, SIMPLIFY_TOL_MM } from './exportGeometry';
+import { exportCredits } from './credits';
 
 // DXF (R12 / AC1009, the most widely readable flavour) for CAD: AutoCAD,
 // Archicad, Vectorworks, Rhino, QGIS. Coordinates are real-world meters in
@@ -126,8 +127,12 @@ export function buildExportDxf(params: BuildDxfParams): string {
     const corners: Pt[] = [[minLon, minLat], [maxLon, minLat], [maxLon, maxLat], [minLon, maxLat], [minLon, minLat]];
     polyline(FRAME_LAYER, corners, true);
     const [fx, fy] = toUtm([minLon, minLat]);
-    g(0, 'TEXT'); g(8, FRAME_LAYER); g(10, fx); g(20, fy - 4 * metersPerMm); g(30, 0); g(40, 2.5 * metersPerMm);
-    g(1, dxfText(`Quicksiteplan · ${label} · 1:${scale} · © OpenStreetMap contributors`));
+    // Notes below the frame: coordinate system, then credits + disclaimer
+    const notes = [`Quicksiteplan · ${label} · 1:${scale}`, ...exportCredits((categories.contours ?? []).length > 0)];
+    notes.forEach((note, i) => {
+      g(0, 'TEXT'); g(8, FRAME_LAYER); g(10, fx); g(20, fy - (4 + i * 3.5) * metersPerMm); g(30, 0); g(40, 2.5 * metersPerMm);
+      g(1, dxfText(note));
+    });
   };
 
   // --- write sections ---

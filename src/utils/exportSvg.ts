@@ -2,6 +2,7 @@ import { OSMFeatureType } from '../components/DataSelector';
 import { LayerStyle, StyleMap } from './exportStyles';
 import { ExportOptions } from './paperSizes';
 import { CategoryMap, computeScaleBar, areaPolygons, simplifyPts, SIMPLIFY_TOL_MM } from './exportGeometry';
+import { exportCredits, PT_TO_MM } from './credits';
 
 // Order matches the map preview and PDF: greenery (fill) below everything,
 // then contours, water, railways, streets, buildings, trees on top.
@@ -379,7 +380,7 @@ export function buildExportSvg(params: BuildSvgParams): string {
 <line x1="${barX}" y1="${barY}" x2="${barX + scaleBarPx}" y2="${barY}"/>
 <line x1="${barX}" y1="${barY - 3 * pageScale}" x2="${barX}" y2="${barY + 3 * pageScale}"/>
 <line x1="${barX + scaleBarPx}" y1="${barY - 3 * pageScale}" x2="${barX + scaleBarPx}" y2="${barY + 3 * pageScale}"/>
-<text x="${barX + scaleBarPx / 2}" y="${barY - 4 * pageScale}" font-size="${10 * pageScale}" text-anchor="middle" fill="rgb(26,26,26)" stroke="none" font-family="sans-serif">${scaleBarLength} m</text>
+<text x="${barX + scaleBarPx / 2}" y="${barY - 4 * pageScale}" font-size="${fmt(10 * pageScale * PT_TO_MM)}" text-anchor="middle" fill="rgb(26,26,26)" stroke="none" font-family="Helvetica, Arial, sans-serif">${scaleBarLength} m</text>
 </g>`;
 
   const arrowX = inset + 24 * pageScale;
@@ -389,14 +390,25 @@ export function buildExportSvg(params: BuildSvgParams): string {
 <line x1="${arrowX}" y1="${arrowY}" x2="${arrowX}" y2="${arrowY - arrowLen}"/>
 <line x1="${arrowX}" y1="${arrowY - arrowLen}" x2="${arrowX - 4 * pageScale}" y2="${arrowY - arrowLen + 7 * pageScale}"/>
 <line x1="${arrowX}" y1="${arrowY - arrowLen}" x2="${arrowX + 4 * pageScale}" y2="${arrowY - arrowLen + 7 * pageScale}"/>
-<text x="${arrowX}" y="${arrowY - arrowLen - 4 * pageScale}" font-size="${12 * pageScale}" text-anchor="middle" fill="rgb(26,26,26)" stroke="none" font-family="sans-serif">N</text>
+<text x="${arrowX}" y="${arrowY - arrowLen - 4 * pageScale}" font-size="${fmt(12 * pageScale * PT_TO_MM)}" text-anchor="middle" fill="rgb(26,26,26)" stroke="none" font-family="Helvetica, Arial, sans-serif">N</text>
 </g>`;
 
   const paperLabel = exportOptions.paperSize === 'Custom'
     ? `${Math.round(wmm)}×${Math.round(hmm)} mm`
     : `${exportOptions.paperSize} ${exportOptions.orientation}`;
   const titleLine = `1:${exportOptions.scale.toLocaleString()}  ·  ${paperLabel}  ·  ${new Date().toLocaleDateString()}`;
-  const titleText = `<text id="title-block" data-name="Title Block" x="${wmm - inset}" y="${hmm - inset}" font-size="${9 * pageScale}" text-anchor="end" fill="rgb(26,26,26)" font-family="sans-serif">${escapeXml(titleLine)}</text>`;
+  const titleText = `<text id="title-block" data-name="Title Block" x="${wmm - inset}" y="${hmm - inset}" font-size="${fmt(9 * pageScale * PT_TO_MM)}" text-anchor="end" fill="rgb(26,26,26)" font-family="Helvetica, Arial, sans-serif">${escapeXml(titleLine)}</text>`;
+
+  // Credits + disclaimer, bottom left, stacked upward from the page inset
+  const creditSize = 6 * pageScale * PT_TO_MM;
+  const creditLines = exportCredits((categories.contours ?? []).length > 0);
+  // light backing box so map lines don't run through the text
+  const boxW = Math.max(...creditLines.map(l => l.length)) * creditSize * 0.52 + creditSize;
+  const boxH = creditLines.length * creditSize * 1.35 + creditSize * 0.4;
+  const creditsGroup = `<g id="credits" data-name="Credits" fill="rgb(80,80,80)" font-size="${fmt(creditSize)}" font-family="Helvetica, Arial, sans-serif">
+<rect x="${fmt(inset - creditSize * 0.5)}" y="${fmt(hmm - inset - boxH + creditSize * 0.6)}" width="${fmt(boxW)}" height="${fmt(boxH)}" fill="#ffffff" fill-opacity="0.85"/>
+${creditLines.map((line, i) => `<text x="${inset}" y="${fmt(hmm - inset - (creditLines.length - 1 - i) * creditSize * 1.35)}">${escapeXml(line)}</text>`).join('\n')}
+</g>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${wmm}mm" height="${hmm}mm" viewBox="0 0 ${wmm} ${hmm}">
@@ -410,5 +422,6 @@ ${groups.join('\n')}
 ${scaleBarGroup}
 ${northArrowGroup}
 ${titleText}
+${creditsGroup}
 </svg>`;
 }

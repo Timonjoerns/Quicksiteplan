@@ -8,6 +8,7 @@ import { OSMFeatureType } from './components/DataSelector';
 import { fetchOsmData } from './utils/overpass';
 import { fetchContours } from './utils/contours';
 import { buildExportDxf } from './utils/exportDxf';
+import { exportCredits } from './utils/credits';
 import { MapData, dataToFeatures } from './utils/mapData';
 import { loadState, saveState } from './utils/urlState';
 import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
@@ -371,6 +372,23 @@ const AppInner: React.FC = () => {
         const paperLabel = options.paperSize === 'Custom' ? `${Math.round(wmm)}×${Math.round(hmm)} mm` : `${options.paperSize} ${options.orientation}`;
         const titleLine = `1:${options.scale.toLocaleString()}  ·  ${paperLabel}  ·  ${new Date().toLocaleDateString()}`;
         doc.text(titleLine, pageW - inset, pageH - inset, { align: 'right' });
+
+        // --- Credits + disclaimer, bottom left ---
+        const creditPt = 6 * pageScale;
+        const creditLines = exportCredits(contours.length > 0);
+        doc.setFontSize(creditPt);
+        // light backing box so map lines don't run through the text
+        const creditMm = creditPt * 0.3528;
+        const boxW = Math.max(...creditLines.map(l => doc.getTextWidth(l))) + creditMm;
+        const boxH = creditLines.length * creditMm * 1.35 + creditMm * 0.4;
+        doc.setGState(new (doc as any).GState({ opacity: 0.85 }));
+        doc.setFillColor(255, 255, 255);
+        doc.rect(inset - creditMm * 0.5, pageH - inset - boxH + creditMm * 0.6, boxW, boxH, 'F');
+        doc.setGState(new (doc as any).GState({ opacity: 1 }));
+        doc.setTextColor(80, 80, 80);
+        creditLines.forEach((line, i) => {
+          doc.text(line, inset, pageH - inset - (creditLines.length - 1 - i) * creditPt * 0.3528 * 1.35);
+        });
       }
       doc.save('siteplan-export.pdf');
     } catch (err) {

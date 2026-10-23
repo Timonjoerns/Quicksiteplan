@@ -3,6 +3,7 @@ import DataSelector from './DataSelector';
 import ExportPanel from './ExportPanel';
 import StylePanel from './StylePanel';
 import PlaceSearch from './PlaceSearch';
+import LegalModal, { LegalPage } from './LegalPages';
 import LoadingParticles from './LoadingParticles';
 import { DownloadIcon } from './Icons';
 import { ExportOptions } from '../utils/paperSizes';
@@ -47,6 +48,7 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
   const [exportOpen, setExportOpen] = useState(true);
   const [styleOpen, setStyleOpen] = useState(false);
   const [stepsOpen, setStepsOpen] = useState(false);
+  const [legalPage, setLegalPage] = useState<LegalPage | null>(null);
 
   return (
     <div className="qsp-sidebar">
@@ -160,6 +162,18 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
           </div>
         )}
       </div>
+
+      <div className="qsp-footer">
+        <p>{t('disclaimerShort')}</p>
+        <p>
+          © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+          {' · '}
+          <button type="button" onClick={() => setLegalPage('imprint')}>{t('imprintTitle')}</button>
+          {' · '}
+          <button type="button" onClick={() => setLegalPage('privacy')}>{t('privacyTitle')}</button>
+        </p>
+      </div>
+      {legalPage && <LegalModal page={legalPage} onClose={() => setLegalPage(null)} />}
     </div>
   );
 };

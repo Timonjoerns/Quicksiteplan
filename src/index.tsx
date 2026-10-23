@@ -1,5 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// Font bundled with the app (not loaded from Google's servers, which
+// would pass every visitor's IP address to Google).
+import '@fontsource/space-grotesk/400.css';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/600.css';
+import '@fontsource/space-grotesk/700.css';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
