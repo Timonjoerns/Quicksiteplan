@@ -1,5 +1,5 @@
 import SidebarCollapsible from './components/SidebarCollapsible';
-import { CenterIcon } from './components/Icons';
+import { CenterIcon, LinkIcon } from './components/Icons';
 
 import './App.css';
 import MapView from './components/MapView';
@@ -497,6 +497,7 @@ const AppInner: React.FC = () => {
           {t('centerHereButton')}
         </button>
         <button type="button" className="qsp-toolbar-btn" onClick={copyLink} title={t('copyLinkHint')}>
+          <LinkIcon size={18} />
           {linkCopied ? t('linkCopied') : t('copyLinkButton')}
         </button>
       </div>
