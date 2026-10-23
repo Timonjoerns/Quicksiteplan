@@ -21,9 +21,9 @@ const DEFAULT_STYLES = [
   { name: 'OSM Default', url: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json' },
 ];
 
-// No hard cap: large areas are fetched in tiles with less detail at small
-// scales (see overpass.ts). Above this size the UI only warns that loading
-// takes longer and exported files get big.
+// No hard cap: large areas are fetched in tiles (see overpass.ts). Above
+// this size the UI only warns that loading takes longer and exported files
+// get big.
 const LARGE_AREA_KM2 = 150;
 
 function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, number]): number {
@@ -61,7 +61,6 @@ const AppInner: React.FC = () => {
     setError(null);
     setLoadingProgress(null);
     fetchOsmData(bbox, selectedTypes, {
-      scale: exportOptions.scale,
       signal: controller.signal,
       onProgress: (p) => {
         if (abortControllerRef.current !== controller) return;
@@ -86,7 +85,7 @@ const AppInner: React.FC = () => {
         setLoading(false);
         setLoadingProgress(null);
       });
-  }, [fetchRequested, bbox, selectedTypes, exportOptions.scale, t]);
+  }, [fetchRequested, bbox, selectedTypes, t]);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
 

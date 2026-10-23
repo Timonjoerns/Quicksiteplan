@@ -50,8 +50,6 @@ export interface Dictionary {
   loadingText: string;
   loadingTextProgress: string;
   largeAreaWarning: string;
-  detailMediumHint: string;
-  detailCoarseHint: string;
   errorFetchFailed: string;
   errorPartialFetch: string;
   errorExportFailed: string;
@@ -113,8 +111,6 @@ export const dictionaries: Record<Lang, Dictionary> = {
     loadingText: 'Loading OSM data…',
     loadingTextProgress: 'Loading data… {done}/{total} requests',
     largeAreaWarning: 'Large area: loading can take several minutes and exported files get big.',
-    detailMediumHint: 'Reduced detail at this scale: {layers} left out, no footpaths or service roads.',
-    detailCoarseHint: 'Overview detail at this scale: {layers} left out, main roads, rivers and large green areas only.',
     errorFetchFailed: 'Failed to fetch OSM data. The server may be busy or rate-limiting — try again shortly.',
     errorPartialFetch: 'Loaded, but these layers failed: {layers}. Try fetching again.',
     errorExportFailed: 'PDF export failed. Try again, or fetch the data again first.',
@@ -174,8 +170,6 @@ export const dictionaries: Record<Lang, Dictionary> = {
     loadingText: 'OSM-Daten werden geladen…',
     loadingTextProgress: 'Daten werden geladen… {done}/{total} Abfragen',
     largeAreaWarning: 'Große Fläche: Das Laden kann mehrere Minuten dauern, Exportdateien werden groß.',
-    detailMediumHint: 'Reduzierte Details in diesem Maßstab: ohne {layers}, keine Fußwege und Zufahrten.',
-    detailCoarseHint: 'Übersichtsdetails in diesem Maßstab: ohne {layers}, nur Hauptstraßen, Flüsse und große Grünflächen.',
     errorFetchFailed: 'OSM-Daten konnten nicht geladen werden. Der Server ist evtl. ausgelastet — versuchen Sie es gleich erneut.',
     errorPartialFetch: 'Geladen, aber diese Ebenen sind fehlgeschlagen: {layers}. Bitte erneut abrufen.',
     errorExportFailed: 'PDF-Export fehlgeschlagen. Erneut versuchen oder die Daten zuerst neu abrufen.',

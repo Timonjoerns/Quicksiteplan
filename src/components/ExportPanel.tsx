@@ -1,8 +1,6 @@
 import React from 'react';
 import { ExportOptions, PAPER_SIZES } from '../utils/paperSizes';
 import { useI18n } from '../i18n/I18nContext';
-import { getDetailLevel, OMITTED_LAYERS } from '../utils/overpass';
-import { LAYER_LABEL_KEYS } from '../utils/layerLabels';
 
 interface ExportPanelProps {
   onExport: (options: ExportOptions) => void;
@@ -18,7 +16,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, export
   const { t } = useI18n();
   const { scale, paperSize, orientation } = exportOptions;
   const largeArea = bboxAreaKm2 > largeAreaKm2;
-  const detail = getDetailLevel(scale);
   const isCustom = paperSize === 'Custom';
 
   return (
@@ -99,13 +96,6 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, export
       <div className="qsp-field__hint">
         {t('exportAreaHint', { area: bboxAreaKm2.toFixed(2) })}
       </div>
-      {detail !== 'full' && (
-        <div className="qsp-field__hint">
-          {t(detail === 'coarse' ? 'detailCoarseHint' : 'detailMediumHint', {
-            layers: OMITTED_LAYERS[detail].map(l => t(LAYER_LABEL_KEYS[l])).join(', '),
-          })}
-        </div>
-      )}
       {largeArea && (
         <div className="qsp-field__hint qsp-field__hint--warn">{t('largeAreaWarning')}</div>
       )}
