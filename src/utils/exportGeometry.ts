@@ -19,7 +19,7 @@ export interface PreparedExport {
 
 const MERCATOR_PROJ = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs';
 
-// Splits GeoJSON features into the app's fixed OSM categories, and builds a
+// Builds a
 // lon/lat -> page-mm projector for the given bbox and page size. Shared by
 // every export format (PDF, SVG, ...) so the geo math only lives in one
 // place.
@@ -58,24 +58,73 @@ export function prepareExportGeometry(
     return [px, py];
   };
 
-  const has = (type: OSMFeatureType) => selectedTypes.includes(type);
-  const categories: CategoryMap = {
-    water: features.filter(f => has('water') && f.properties && (f.properties.waterway || f.properties.natural === 'water')),
-    streets: features.filter(f => has('streets') && f.properties && f.properties.highway),
-    buildings: features.filter(f => has('buildings') && f.properties && f.properties.building),
-    railways: features.filter(f => has('railways') && f.properties && f.properties.railway === 'rail'),
-    trees: features.filter(f => has('trees') && f.properties && f.properties.natural === 'tree'),
-    greenery: features.filter(f => has('greenery') && f.properties && (
-      f.properties.landuse === 'forest' || f.properties.landuse === 'grass' || f.properties.landuse === 'meadow' ||
-      f.properties.landuse === 'orchard' || f.properties.landuse === 'vineyard' || f.properties.landuse === 'farmland' ||
-      f.properties.landuse === 'allotments' || f.properties.leisure === 'park' || f.properties.leisure === 'garden' ||
-      f.properties.leisure === 'nature_reserve' || f.properties.natural === 'wood' || f.properties.natural === 'scrub' ||
-      f.properties.natural === 'grassland' || f.properties.natural === 'heath'
-    )),
-  };
+  const categories = categorizeFeatures(features, selectedTypes);
 
   return { project, categories, trueWidthMeters };
 }
+
+const GREENERY_LANDUSE = ['forest', 'grass', 'meadow', 'orchard', 'vineyard', 'farmland', 'allotments'];
+const GREENERY_LEISURE = ['park', 'garden', 'nature_reserve'];
+const GREENERY_NATURAL = ['wood', 'scrub', 'grassland', 'heath'];
+
+// Splits GeoJSON features into the app's fixed layer categories (only the
+// selected ones). Shared by the map preview and every export format.
+export function categorizeFeatures(features: GeoJSON.Feature[], selectedTypes: OSMFeatureType[]): CategoryMap {
+  const has = (type: OSMFeatureType) => selectedTypes.includes(type);
+  const pick = (type: OSMFeatureType, test: (p: GeoJSON.GeoJsonProperties & {}) => boolean) =>
+    has(type) ? features.filter(f => f.properties && test(f.properties)) : [];
+  return {
+    water: pick('water', p => !!(p.waterway || p.natural === 'water')),
+    streets: pick('streets', p => !!p.highway),
+    buildings: pick('buildings', p => !!p.building),
+    railways: pick('railways', p => p.railway === 'rail'),
+    trees: pick('trees', p => p.natural === 'tree'),
+    greenery: pick('greenery', p => GREENERY_LANDUSE.includes(p.landuse) || GREENERY_LEISURE.includes(p.leisure) || GREENERY_NATURAL.includes(p.natural)),
+    contours: pick('contours', p => !!p.contour),
+  };
+}
+
+// Douglas–Peucker line simplification. Used with a tolerance below what
+// the printer can resolve (in page mm, or meters for DXF), so nothing
+// visibly changes but large-area exports lose most of their redundant
+// points.
+export function simplifyPts<T extends [number, number]>(pts: T[], tol: number): T[] {
+  if (pts.length < 3 || tol <= 0) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = 1;
+  keep[pts.length - 1] = 1;
+  const stack: [number, number][] = [[0, pts.length - 1]];
+  const tol2 = tol * tol;
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    const [ax, ay] = pts[a];
+    const [bx, by] = pts[b];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    let maxD = -1;
+    let idx = -1;
+    for (let i = a + 1; i < b; i++) {
+      const [px, py] = pts[i];
+      let d2: number;
+      if (len2 === 0) {
+        d2 = (px - ax) ** 2 + (py - ay) ** 2;
+      } else {
+        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+        d2 = (px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2;
+      }
+      if (d2 > maxD) { maxD = d2; idx = i; }
+    }
+    if (maxD > tol2 && idx > 0) {
+      keep[idx] = 1;
+      stack.push([a, idx], [idx, b]);
+    }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+// Page-mm tolerance for simplification: ~1/600 inch, finer than print.
+export const SIMPLIFY_TOL_MM = 0.04;
 
 // Returns a feature's area geometry as polygons ([outer, ...holes][]), or
 // null for open lines/points. Closed LineStrings count as areas: OSM

@@ -7,7 +7,8 @@ export type OSMFeatureType =
   | 'buildings'
   | 'railways'
   | 'trees'
-  | 'greenery';
+  | 'greenery'
+  | 'contours';
 
 interface DataSelectorProps {
   selected: OSMFeatureType[];
@@ -24,6 +25,7 @@ const DataSelector: React.FC<DataSelectorProps> = ({ selected, onChange }) => {
     { label: t('layerRailways'), value: 'railways' },
     { label: t('layerTrees'), value: 'trees' },
     { label: t('layerGreenery'), value: 'greenery' },
+    { label: t('layerContours'), value: 'contours' },
   ];
 
   const handleChange = (value: OSMFeatureType) => {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import DataSelector from './DataSelector';
 import ExportPanel from './ExportPanel';
 import StylePanel from './StylePanel';
+import PlaceSearch from './PlaceSearch';
 import LoadingParticles from './LoadingParticles';
 import { DownloadIcon } from './Icons';
 import { ExportOptions } from '../utils/paperSizes';
@@ -24,16 +25,22 @@ interface SidebarCollapsibleProps {
   setExportOptions: (opts: ExportOptions) => void;
   handleExport: (opts: ExportOptions) => void;
   handleExportSVG: (opts: ExportOptions) => void;
+  handleExportDXF: (opts: ExportOptions) => void;
   onFetch: () => void;
   stylePreset: PresetKey;
   onStylePresetChange: (preset: PresetKey) => void;
   layerStyles: StyleMap;
   onLayerStyleChange: (type: OSMFeatureType, patch: Partial<LayerStyle>) => void;
+  onPlaceSelect: (lon: number, lat: number) => void;
+  contourInterval: number | null;
+  onContourIntervalChange: (m: number | null) => void;
+  usedContourInterval: number | null;
 }
 
 const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
-  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, largeAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, handleExportSVG, onFetch,
-  stylePreset, onStylePresetChange, layerStyles, onLayerStyleChange,
+  loading, loadingProgress, error, exportError, hasData, bboxAreaKm2, largeAreaKm2, selectedTypes, setSelectedTypes, exportOptions, setExportOptions, handleExport, handleExportSVG, handleExportDXF, onFetch,
+  stylePreset, onStylePresetChange, layerStyles, onLayerStyleChange, onPlaceSelect,
+  contourInterval, onContourIntervalChange, usedContourInterval,
 }) => {
   const { t, lang, setLang } = useI18n();
   const [featuresOpen, setFeaturesOpen] = useState(true);
@@ -52,6 +59,7 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
           </div>
         </div>
         <p className="qsp-tagline">{t('tagline')}</p>
+        <PlaceSearch onSelect={onPlaceSelect} />
       </div>
 
       <div className="qsp-section">
@@ -62,6 +70,26 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
         {featuresOpen && (
           <div className="qsp-section__body">
             <DataSelector selected={selectedTypes} onChange={setSelectedTypes} />
+            {selectedTypes.includes('contours') && (
+              <label className="qsp-field" style={{ marginTop: 12 }}>
+                <span className="qsp-field__label">{t('contourIntervalLabel')}</span>
+                <input
+                  className="qsp-input"
+                  type="number"
+                  min={0.5}
+                  step={0.5}
+                  value={contourInterval ?? ''}
+                  placeholder={t('contourIntervalAuto')}
+                  onChange={e => {
+                    const v = Number(e.target.value);
+                    onContourIntervalChange(e.target.value === '' || !(v > 0) ? null : v);
+                  }}
+                />
+                <span className="qsp-field__hint">
+                  {usedContourInterval ? t('contourIntervalUsed', { m: usedContourInterval }) + ' · ' : ''}{t('contourSourceHint')}
+                </span>
+              </label>
+            )}
             <button type="button" className="qsp-btn" style={{ marginTop: 14 }} onClick={onFetch} disabled={loading}>
               <DownloadIcon size={16} />
               {loading ? t('fetchButtonLoading') : t('fetchButton')}
@@ -86,6 +114,7 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
             <ExportPanel
               onExport={handleExport}
               onExportSVG={handleExportSVG}
+              onExportDXF={handleExportDXF}
               exportOptions={exportOptions}
               onExportOptionsChange={setExportOptions}
               bboxAreaKm2={bboxAreaKm2}

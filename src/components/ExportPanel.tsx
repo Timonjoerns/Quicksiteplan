@@ -6,6 +6,7 @@ import { TREES_MAX_SCALE } from '../utils/overpass';
 interface ExportPanelProps {
   onExport: (options: ExportOptions) => void;
   onExportSVG: (options: ExportOptions) => void;
+  onExportDXF: (options: ExportOptions) => void;
   exportOptions: ExportOptions;
   onExportOptionsChange: (opts: ExportOptions) => void;
   bboxAreaKm2: number;
@@ -13,7 +14,7 @@ interface ExportPanelProps {
   hasData: boolean;
 }
 
-const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, exportOptions, onExportOptionsChange, bboxAreaKm2, largeAreaKm2, hasData }) => {
+const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, onExportDXF, exportOptions, onExportOptionsChange, bboxAreaKm2, largeAreaKm2, hasData }) => {
   const { t } = useI18n();
   const { scale, paperSize, orientation } = exportOptions;
   const largeArea = bboxAreaKm2 > largeAreaKm2;
@@ -117,6 +118,15 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ onExport, onExportSVG, export
             title={t('exportSvgHint')}
           >
             {t('exportSvgButton')}
+          </button>
+          <button
+            className="qsp-btn qsp-btn--secondary"
+            type="button"
+            style={{ marginTop: 8 }}
+            onClick={() => onExportDXF(exportOptions)}
+            title={t('exportDxfHint')}
+          >
+            {t('exportDxfButton')}
           </button>
         </>
       ) : (

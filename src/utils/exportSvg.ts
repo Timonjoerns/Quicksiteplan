@@ -1,11 +1,11 @@
 import { OSMFeatureType } from '../components/DataSelector';
 import { LayerStyle, StyleMap } from './exportStyles';
 import { ExportOptions } from './paperSizes';
-import { CategoryMap, computeScaleBar, areaPolygons } from './exportGeometry';
+import { CategoryMap, computeScaleBar, areaPolygons, simplifyPts, SIMPLIFY_TOL_MM } from './exportGeometry';
 
 // Order matches the map preview and PDF: greenery (fill) below everything,
-// then water, railways, streets, buildings, trees on top.
-const CATEGORY_ORDER: OSMFeatureType[] = ['greenery', 'water', 'railways', 'streets', 'buildings'];
+// then contours, water, railways, streets, buildings, trees on top.
+const CATEGORY_ORDER: OSMFeatureType[] = ['greenery', 'contours', 'water', 'railways', 'streets', 'buildings'];
 
 const CATEGORY_LABELS: Record<OSMFeatureType, string> = {
   water: 'Water',
@@ -14,6 +14,7 @@ const CATEGORY_LABELS: Record<OSMFeatureType, string> = {
   railways: 'Railways',
   trees: 'Trees',
   greenery: 'Greenery',
+  contours: 'Contour Lines',
 };
 
 // Shadows fall toward the lower right of the page; length = object height
@@ -50,15 +51,30 @@ function escapeXml(s: string): string {
 const fmt = (n: number) => n.toFixed(2);
 const rgb = ([r, g, b]: [number, number, number]) => `rgb(${r},${g},${b})`;
 
+// Projects to page mm and drops points closer than the printer can show.
 function projectPts(coords: Pt[], project: (c: Pt) => Pt): Pt[] {
-  return coords.map(project).filter(([x, y]) => !isNaN(x) && !isNaN(y));
+  return simplifyPts(coords.map(project).filter(([x, y]) => !isNaN(x) && !isNaN(y)), SIMPLIFY_TOL_MM);
 }
 
+// Path data with relative moves after the first point (much shorter than
+// absolute coordinates). Deltas are taken between already-rounded points,
+// so rounding doesn't accumulate along the line.
 function pathFromPts(pts: Pt[], close: boolean): string {
   if (pts.length < 2) return '';
-  let d = `M ${fmt(pts[0][0])} ${fmt(pts[0][1])} `;
-  for (let i = 1; i < pts.length; i++) d += `L ${fmt(pts[i][0])} ${fmt(pts[i][1])} `;
-  if (close) d += 'Z';
+  const r = (n: number) => Math.round(n * 100) / 100;
+  let px = r(pts[0][0]);
+  let py = r(pts[0][1]);
+  let d = `M${px} ${py}l`;
+  for (let i = 1; i < pts.length; i++) {
+    const x = r(pts[i][0]);
+    const y = r(pts[i][1]);
+    const dx = Math.round((x - px) * 100) / 100;
+    const dy = Math.round((y - py) * 100) / 100;
+    d += `${i > 1 && dx >= 0 ? ' ' : ''}${dx}${dy >= 0 ? ' ' : ''}${dy}`;
+    px = x;
+    py = y;
+  }
+  if (close) d += 'z';
   return d;
 }
 
@@ -290,6 +306,10 @@ export function buildExportSvg(params: BuildSvgParams): string {
           const widthM = parseMeters(f.properties?.width) ?? WATERWAY_WIDTH_M[String(f.properties?.waterway)] ?? 0;
           const w = Math.max(style.lineWidth, Math.min(widthM, 80) * mmPerMeter);
           paths.push(`<path d="${d}" fill="none" stroke-width="${fmt(w)}"/>`);
+        } else if (f.properties?.contour) {
+          // index contours (every 5th) drawn heavier, with their height
+          const idx = f.properties.index;
+          paths.push(`<path d="${d}" fill="none"${idx ? ` stroke-width="${fmt(style.lineWidth * 2.2)}"` : ''} data-ele="${f.properties.ele}"/>`);
         } else {
           paths.push(`<path d="${d}" fill="none"/>`);
         }

@@ -8,4 +8,5 @@ export const LAYER_LABEL_KEYS: Record<OSMFeatureType, keyof Dictionary> = {
   railways: 'layerRailways',
   trees: 'layerTrees',
   greenery: 'layerGreenery',
+  contours: 'layerContours',
 };

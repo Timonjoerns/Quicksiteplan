@@ -488,3 +488,70 @@
 .qsp-app .maplibregl-ctrl-bottom-right {
   font-family: var(--qsp-font);
 }
+
+/* ---------- Place search ---------- */
+
+.qsp-search {
+  margin-top: 14px;
+}
+
+.qsp-search__row {
+  display: flex;
+}
+
+.qsp-search__row .qsp-input {
+  flex: 1;
+  min-width: 0;
+  border-right: none;
+}
+
+.qsp-search__btn {
+  flex-shrink: 0;
+  padding: 0 14px;
+  background: var(--qsp-ink);
+  color: var(--qsp-paper);
+  border: var(--qsp-border);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.qsp-search__btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.qsp-search__results {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border: var(--qsp-border);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.qsp-search__results li + li {
+  border-top: 1px dashed var(--qsp-ink-18);
+}
+
+.qsp-search__results button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--qsp-paper);
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--qsp-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.qsp-search__results button:hover {
+  background: var(--qsp-ink);
+  color: var(--qsp-paper);
+}

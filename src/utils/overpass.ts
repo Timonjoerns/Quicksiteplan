@@ -1,11 +1,14 @@
 import axios from 'axios';
 import { OSMFeatureType } from '../components/DataSelector';
+import { cacheGet, cacheSet } from './requestCache';
 
 // Tile edge length per layer for splitting large areas into separate
 // requests. Dense layers (buildings, streets) need small tiles to stay
 // inside the server's time/size limits; sparse ones cover far more ground
 // per request, which cuts the request count for large areas a lot.
-const TILE_SIZE_KM: Record<OSMFeatureType, number> = {
+type OverpassLayer = Exclude<OSMFeatureType, 'contours'>;
+
+const TILE_SIZE_KM: Record<OverpassLayer, number> = {
   buildings: 4,
   streets: 4,
   trees: 4,
@@ -13,6 +16,9 @@ const TILE_SIZE_KM: Record<OSMFeatureType, number> = {
   water: 15,
   railways: 25,
 };
+
+// Contour lines come from elevation tiles (see contours.ts), not Overpass.
+export const OVERPASS_LAYERS: OverpassLayer[] = ['water', 'streets', 'buildings', 'railways', 'trees', 'greenery'];
 
 // A tile that still fails is split into quarters and retried, down to this
 // edge length.
@@ -29,12 +35,14 @@ const CONCURRENCY = 3;
 
 // Map OSMFeatureType to Overpass QL queries. 'greenery' expands to a union
 // of several sub-filters, each still part of the SAME request for that type.
-const featureQueries: Record<OSMFeatureType, string> = {
+const featureQueries: Record<OverpassLayer, string> = {
   // Lakes/rivers mapped as areas (closed ways, or multipolygon relations for
   // the large ones), plus river/canal/stream center lines.
   water: 'way["natural"="water"];relation["natural"="water"]["type"="multipolygon"];way["waterway"~"^(river|canal|stream)$"]',
   streets: 'way["highway"]',
-  buildings: 'way["building"]',
+  // Large buildings with courtyards (stations, malls, castles) are often
+  // multipolygon relations rather than single closed ways.
+  buildings: 'way["building"];relation["building"]["type"="multipolygon"]',
   railways: 'way["railway"="rail"]',
   trees: 'node["natural"="tree"]',
   greenery: 'way["landuse"="forest"];way["landuse"="grass"];way["landuse"="meadow"];way["landuse"="orchard"];way["landuse"="vineyard"];way["landuse"="farmland"];way["landuse"="allotments"];way["leisure"="park"];way["leisure"="garden"];way["leisure"="nature_reserve"];way["natural"="wood"];way["natural"="scrub"];way["natural"="grassland"];way["natural"="heath"];relation["leisure"="park"]["type"="multipolygon"];relation["landuse"="forest"]["type"="multipolygon"];relation["natural"="wood"]["type"="multipolygon"]',
@@ -53,11 +61,8 @@ const OVERPASS_MIRRORS = [
 const REQUEST_TIMEOUT_MS = 30000;
 const SERVER_TIMEOUT_S = 25;
 
-function buildQuery(type: OSMFeatureType, bboxStr: string): string {
-  const q = featureQueries[type];
-  const clauses = q.includes(';')
-    ? q.split(';').filter(s => s.trim()).map(subq => `${subq}(${bboxStr});`)
-    : [`${q}(${bboxStr});`];
+function buildQuery(q: string, bboxStr: string): string {
+  const clauses = q.split(';').filter(sub => sub.trim()).map(sub => `${sub}(${bboxStr});`);
   // `out geom;` embeds each way's coordinates directly in the response, so
   // there's no need for the old recursive ">;" pass that fetches every
   // shared node separately — a smaller payload per request, especially for
@@ -66,12 +71,27 @@ function buildQuery(type: OSMFeatureType, bboxStr: string): string {
 }
 
 // Tries every mirror, starting at `firstMirror` so parallel workers each
-// begin on a different one.
-async function fetchLayer(type: OSMFeatureType, bboxStr: string, firstMirror: number, signal?: AbortSignal): Promise<any[]> {
-  const query = buildQuery(type, bboxStr);
+// begin on a different one. Successful answers are cached (see
+// requestCache.ts), so re-fetching the same area — after a reload, or to
+// retry the tiles that failed — only requests what's missing.
+// A mirror that just failed (timeout, network error, 429/5xx) is moved to
+// the back of the line for a while, so one hanging instance doesn't make
+// every request wait out its full timeout first.
+const MIRROR_PENALTY_MS = 2 * 60 * 1000;
+const mirrorPenaltyUntil = OVERPASS_MIRRORS.map(() => 0);
+
+function mirrorOrder(first: number): number[] {
+  const now = Date.now();
+  const order = OVERPASS_MIRRORS.map((_, i) => (first + i) % OVERPASS_MIRRORS.length);
+  return [...order.filter(i => mirrorPenaltyUntil[i] <= now), ...order.filter(i => mirrorPenaltyUntil[i] > now)];
+}
+
+async function fetchQuery(query: string, firstMirror: number, signal?: AbortSignal): Promise<any[]> {
+  const cached = await cacheGet(query);
+  if (cached) return cached;
   let lastError: any = null;
-  for (let m = 0; m < OVERPASS_MIRRORS.length; m++) {
-    const url = OVERPASS_MIRRORS[(firstMirror + m) % OVERPASS_MIRRORS.length];
+  for (const m of mirrorOrder(firstMirror)) {
+    const url = OVERPASS_MIRRORS[m];
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     try {
       const response = await axios.post(url, query, {
@@ -79,13 +99,19 @@ async function fetchLayer(type: OSMFeatureType, bboxStr: string, firstMirror: nu
         timeout: REQUEST_TIMEOUT_MS,
         signal,
       });
-      if (Array.isArray(response.data?.elements)) {
+      // Overpass reports server-side timeouts/memory limits as a 200 with
+      // a "remark" and a truncated element list — not a usable answer.
+      if (Array.isArray(response.data?.elements) && !response.data?.remark) {
+        cacheSet(query, response.data.elements);
         return response.data.elements;
       }
-      lastError = new Error('Unexpected response shape');
+      // a server-side timeout/memory remark is about this query, not the
+      // mirror: don't penalize the mirror for it
+      lastError = new Error(response.data?.remark || 'Unexpected response shape');
     } catch (err: any) {
-      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') throw err;
+      if (isAbort(err)) throw err;
       lastError = err;
+      mirrorPenaltyUntil[m] = Date.now() + MIRROR_PENALTY_MS;
       // try the next mirror
     }
   }
@@ -144,9 +170,20 @@ export async function fetchOsmData(
   types: OSMFeatureType[],
   options?: { scale?: number; signal?: AbortSignal; onProgress?: (p: FetchProgress) => void }
 ): Promise<FetchResult> {
-  if ((options?.scale ?? 0) > TREES_MAX_SCALE) types = types.filter(t => t !== 'trees');
-  const queue: { type: OSMFeatureType; bbox: Bbox }[] = [];
-  types.forEach(type => splitBbox(bbox, TILE_SIZE_KM[type]).forEach(tile => queue.push({ type, bbox: tile })));
+  let layers = OVERPASS_LAYERS.filter(t => types.includes(t));
+  if ((options?.scale ?? 0) > TREES_MAX_SCALE) layers = layers.filter(t => t !== 'trees');
+
+  // Snap the area outward to a ~100 m grid (0.001°) before tiling: the
+  // frame restored after a reload or shared link differs from the original
+  // by fractions of a meter, which would otherwise change every tile's
+  // query and miss the cache.
+  const SNAP = 1000;
+  bbox = [
+    Math.floor(bbox[0] * SNAP) / SNAP, Math.floor(bbox[1] * SNAP) / SNAP,
+    Math.ceil(bbox[2] * SNAP) / SNAP, Math.ceil(bbox[3] * SNAP) / SNAP,
+  ];
+  const queue: { type: OverpassLayer; bbox: Bbox }[] = [];
+  layers.forEach(type => splitBbox(bbox, TILE_SIZE_KM[type]).forEach(tile => queue.push({ type, bbox: tile })));
 
   let total = queue.length;
   let done = 0;
@@ -160,7 +197,8 @@ export async function fetchOsmData(
       const task = queue.shift()!;
       const [minLon, minLat, maxLon, maxLat] = task.bbox;
       try {
-        const tileElements = await fetchLayer(task.type, `${minLat},${minLon},${maxLat},${maxLon}`, mirror, options?.signal);
+        const query = buildQuery(featureQueries[task.type], [minLat, minLon, maxLat, maxLon].map(v => v.toFixed(6)).join(','));
+        const tileElements = await fetchQuery(query, mirror, options?.signal);
         for (const el of tileElements) {
           const key = `${el.type}/${el.id}`;
           if (seen.has(key)) continue;
@@ -185,7 +223,7 @@ export async function fetchOsmData(
 
   await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
 
-  const failedLayers = types.filter(t => failed.has(t));
+  const failedLayers = layers.filter(t => failed.has(t));
   if (elements.length === 0 && failedLayers.length > 0) {
     throw new Error('All layers failed to load');
   }

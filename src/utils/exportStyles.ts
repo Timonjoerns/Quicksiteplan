@@ -41,6 +41,7 @@ const BASE: StyleMap = {
   railways: { color: [68, 68, 68], lineWidth: 0.1, fill: false, fillOpacity: 1, dash: [2, 1.3] },
   trees: { color: [34, 139, 34], lineWidth: 0.1, fill: true, fillOpacity: 1, pointRadius: 0.8 },
   greenery: { color: [144, 238, 144], lineWidth: 0.1, fill: true, fillOpacity: 1 },
+  contours: { color: [170, 120, 80], lineWidth: 0.1, fill: false, fillOpacity: 1 },
 };
 
 const INK: [number, number, number] = [26, 26, 26];
@@ -57,6 +58,7 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: INK, lineWidth: 0.1, fill: false, fillOpacity: 1, dash: [2, 1.3] },
     trees: { color: INK, lineWidth: 0.1, fill: true, fillOpacity: 1, pointRadius: 0.7 },
     greenery: { color: INK, lineWidth: 0.1, fill: true, fillOpacity: 0.08 },
+    contours: { color: INK, lineWidth: 0.1, fill: false, fillOpacity: 1, dash: [0.6, 0.6] },
   },
 
   // Achromatic shades, differentiated by darkness instead of hue — safe for
@@ -68,6 +70,7 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: [60, 60, 60], lineWidth: 0.1, fill: false, fillOpacity: 1, dash: [2, 1.3] },
     trees: { color: [100, 100, 100], lineWidth: 0.1, fill: true, fillOpacity: 1, pointRadius: 0.8 },
     greenery: { color: [190, 190, 190], lineWidth: 0.1, fill: true, fillOpacity: 0.5 },
+    contours: { color: [150, 150, 150], lineWidth: 0.1, fill: false, fillOpacity: 1 },
   },
 
   // Default colors, thicker strokes — holds up at large formats (A1/A0) or
@@ -79,6 +82,7 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: [68, 68, 68], lineWidth: 1.0, fill: false, fillOpacity: 1, dash: [3, 2] },
     trees: { color: [34, 139, 34], lineWidth: 0.6, fill: true, fillOpacity: 1, pointRadius: 1.2 },
     greenery: { color: [144, 238, 144], lineWidth: 1.0, fill: true, fillOpacity: 1 },
+    contours: { color: [170, 120, 80], lineWidth: 0.5, fill: false, fillOpacity: 1 },
   },
 
   // Hand-drawn architectural site plan: white buildings with cast shadows,
@@ -91,6 +95,7 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: [60, 60, 60], lineWidth: 0.3, fill: false, fillOpacity: 1, dash: [1.5, 1] },
     trees: { color: [60, 60, 60], lineWidth: 0.15, fill: true, fillOpacity: 0.18, pointRadius: 0.8, shadow: true, canopy: 'scribble' },
     greenery: { color: [90, 90, 90], lineWidth: 0.15, fill: true, fillOpacity: 0.06, texture: 'stipple', dash: [0.8, 0.6] },
+    contours: { color: [150, 150, 150], lineWidth: 0.12, fill: false, fillOpacity: 1 },
   },
 
   // Grayscale "aerial photo" look: a grainy ground, darker grainy green
@@ -103,6 +108,7 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: [80, 80, 80], lineWidth: 0.3, fill: false, fillOpacity: 1, dash: [1.5, 1] },
     trees: { color: [25, 25, 25], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [95, 95, 95], pointRadius: 0.8, shadow: true, canopy: 'soft', texture: 'grain' },
     greenery: { color: [45, 45, 45], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [160, 160, 160], texture: 'grain' },
+    contours: { color: [90, 90, 90], lineWidth: 0.1, fill: false, fillOpacity: 1 },
   },
 
   // Vibrant urban-masterplan diagram: saturated blue water with rivers at
@@ -115,6 +121,7 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: [140, 60, 230], lineWidth: 0.35, fill: false, fillOpacity: 1, dash: [1.2, 0.8] },
     trees: { color: [120, 205, 175], lineWidth: 0.1, fill: true, fillOpacity: 1, pointRadius: 0.45 },
     greenery: { color: [130, 205, 185], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [222, 243, 236], texture: 'lines' },
+    contours: { color: [170, 215, 200], lineWidth: 0.1, fill: false, fillOpacity: 1 },
   },
 };
 

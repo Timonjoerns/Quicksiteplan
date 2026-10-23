@@ -6,12 +6,15 @@ import MapView from './components/MapView';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { OSMFeatureType } from './components/DataSelector';
 import { fetchOsmData } from './utils/overpass';
-import { osmElementsToGeoJSON } from './utils/osmToGeoJSON';
+import { fetchContours } from './utils/contours';
+import { buildExportDxf } from './utils/exportDxf';
+import { MapData, dataToFeatures } from './utils/mapData';
+import { loadState, saveState } from './utils/urlState';
 import { ExportOptions, getPaperDimsMm } from './utils/paperSizes';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 import { PresetKey, StyleMap, LayerStyle, STYLE_PRESETS, cloneStyleMap, PRESET_BACKGROUNDS } from './utils/exportStyles';
 import { LAYER_LABEL_KEYS } from './utils/layerLabels';
-import { prepareExportGeometry, computeScaleBar, areaPolygons } from './utils/exportGeometry';
+import { prepareExportGeometry, computeScaleBar, areaPolygons, simplifyPts, SIMPLIFY_TOL_MM } from './utils/exportGeometry';
 import { buildExportSvg } from './utils/exportSvg';
 import jsPDF from 'jspdf';
 
@@ -26,6 +29,18 @@ const DEFAULT_STYLES = [
 // get big.
 const LARGE_AREA_KM2 = 150;
 
+function downloadBlob(content: string, type: string, filename: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, number]): number {
   const metersPerDegLat = 111320;
   const centerLat = (minLat + maxLat) / 2;
@@ -35,16 +50,28 @@ function bboxAreaKm2([minLon, minLat, maxLon, maxLat]: [number, number, number, 
   return widthKm * heightKm;
 }
 
+// Settings from a shared link or the last session, read once at startup.
+const initialState = loadState();
+
+function bboxAround([lon, lat]: [number, number]): [number, number, number, number] {
+  const dLon = (DEFAULT_BBOX[2] - DEFAULT_BBOX[0]) / 2;
+  const dLat = (DEFAULT_BBOX[3] - DEFAULT_BBOX[1]) / 2;
+  return [lon - dLon, lat - dLat, lon + dLon, lat + dLat];
+}
+
 const AppInner: React.FC = () => {
   const { t } = useI18n();
-  const [bbox, setBbox] = useState<[number, number, number, number]>(DEFAULT_BBOX);
-  const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(['water', 'streets', 'buildings', 'trees', 'greenery']);
-  const [osmData, setOsmData] = useState<any>(null);
+  // (frame size is re-derived from paper size and scale on mount)
+  const [bbox, setBbox] = useState<[number, number, number, number]>(() => initialState ? bboxAround(initialState.center) : DEFAULT_BBOX);
+  const [selectedTypes, setSelectedTypes] = useState<OSMFeatureType[]>(() => initialState?.layers ?? ['water', 'streets', 'buildings', 'trees', 'greenery']);
+  const [osmData, setOsmData] = useState<MapData | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fetchRequested, setFetchRequested] = useState(false);
-  const [exportOptions, setExportOptions] = useState<ExportOptions>({ scale: 5000, paperSize: 'A4', orientation: 'portrait' });
+  // Contour spacing in meters; null = automatic (from scale and relief)
+  const [contourInterval, setContourInterval] = useState<number | null>(() => initialState?.contourInterval ?? null);
+  const [exportOptions, setExportOptions] = useState<ExportOptions>(() => initialState?.exportOptions ?? { scale: 5000, paperSize: 'A4', orientation: 'portrait' });
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Only fetch OSM data when user clicks fetch button. Each selected layer
@@ -60,25 +87,38 @@ const AppInner: React.FC = () => {
     setLoading(true);
     setError(null);
     setLoadingProgress(null);
-    fetchOsmData(bbox, selectedTypes, {
-      scale: exportOptions.scale,
-      signal: controller.signal,
-      onProgress: (p) => {
-        if (abortControllerRef.current !== controller) return;
-        setLoadingProgress({ done: p.done, total: p.total });
-      },
-    })
-      .then(result => {
+    // Contour lines come from a separate elevation service, fetched in
+    // parallel with the OSM layers.
+    const wantsOsm = selectedTypes.some(type => type !== 'contours');
+    const contoursPromise: Promise<GeoJSON.Feature[] | null> = selectedTypes.includes('contours')
+      ? fetchContours(bbox, exportOptions.scale, contourInterval, controller.signal).catch(err => {
+        if (err?.name === 'AbortError') throw err;
+        return null;
+      })
+      : Promise.resolve([]);
+    const osmPromise = wantsOsm
+      ? fetchOsmData(bbox, selectedTypes, {
+        scale: exportOptions.scale,
+        signal: controller.signal,
+        onProgress: (p) => {
+          if (abortControllerRef.current !== controller) return;
+          setLoadingProgress({ done: p.done, total: p.total });
+        },
+      })
+      : Promise.resolve({ elements: [], failedLayers: [] as OSMFeatureType[] });
+    Promise.all([osmPromise, contoursPromise])
+      .then(([result, contours]) => {
         if (abortControllerRef.current !== controller) return; // superseded by a newer fetch
-        setOsmData({ elements: result.elements });
-        if (result.failedLayers.length > 0) {
-          const layerNames = result.failedLayers.map(l => t(LAYER_LABEL_KEYS[l])).join(', ');
+        setOsmData({ elements: result.elements, contours: contours ?? [], bbox, scale: exportOptions.scale });
+        const failedLayers: OSMFeatureType[] = [...result.failedLayers, ...(contours === null ? ['contours' as const] : [])];
+        if (failedLayers.length > 0) {
+          const layerNames = failedLayers.map(l => t(LAYER_LABEL_KEYS[l])).join(', ');
           setError(t('errorPartialFetch', { layers: layerNames }));
         }
       })
       .catch((err) => {
         if (abortControllerRef.current !== controller) return; // superseded by a newer fetch
-        if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
+        if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') return;
         setError(t('errorFetchFailed'));
       })
       .finally(() => {
@@ -86,12 +126,58 @@ const AppInner: React.FC = () => {
         setLoading(false);
         setLoadingProgress(null);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- contourInterval changes are handled by the effect below, without a full re-fetch
   }, [fetchRequested, bbox, selectedTypes, exportOptions.scale, t]);
+
+  // Interval changed after a fetch: regenerate only the contours, for the
+  // same area as the loaded data.
+  const contourRequest = useRef(0);
+  useEffect(() => {
+    if (!osmData || !selectedTypes.includes('contours')) return;
+    const req = ++contourRequest.current;
+    const id = window.setTimeout(() => {
+      fetchContours(osmData.bbox, osmData.scale, contourInterval)
+        .then(contours => {
+          if (req === contourRequest.current) setOsmData(prev => (prev ? { ...prev, contours } : prev));
+        })
+        .catch(() => { /* keep the previous contours */ });
+    }, 400);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the interval should trigger this
+  }, [contourInterval]);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const [stylePreset, setStylePreset] = useState<PresetKey>('default');
-  const [layerStyles, setLayerStyles] = useState<StyleMap>(() => cloneStyleMap(STYLE_PRESETS.default));
+  const [stylePreset, setStylePreset] = useState<PresetKey>(() => initialState?.preset ?? 'default');
+  const [layerStyles, setLayerStyles] = useState<StyleMap>(() => cloneStyleMap(STYLE_PRESETS[initialState?.preset ?? 'default']));
+
+  // Keep the URL (shareable link) and saved session in sync with the setup.
+  const centerLon = Math.round(((bbox[0] + bbox[2]) / 2) * 1e5) / 1e5;
+  const centerLat = Math.round(((bbox[1] + bbox[3]) / 2) * 1e5) / 1e5;
+  useEffect(() => {
+    const id = window.setTimeout(() => saveState({ center: [centerLon, centerLat], exportOptions, preset: stylePreset, layers: selectedTypes, contourInterval }), 300);
+    return () => window.clearTimeout(id);
+  }, [centerLon, centerLat, exportOptions, stylePreset, selectedTypes, contourInterval]);
+
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyLink = () => {
+    saveState({ center: [centerLon, centerLat], exportOptions, preset: stylePreset, layers: selectedTypes, contourInterval });
+    navigator.clipboard?.writeText(window.location.href).then(() => {
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    }).catch(() => { /* clipboard blocked: the URL bar has the link too */ });
+  };
+
+  // Search result picked: move the frame there (same size) and the map too.
+  const goTo = useCallback((lon: number, lat: number) => {
+    setBbox(([minLon, minLat, maxLon, maxLat]) => {
+      const dLon = (maxLon - minLon) / 2;
+      const dLat = (maxLat - minLat) / 2;
+      const next: [number, number, number, number] = [lon - dLon, lat - dLat, lon + dLon, lat + dLat];
+      mapRef.current?.fitBounds([[next[0], next[1]], [next[2], next[3]]], { padding: 80, duration: 800 });
+      return next;
+    });
+  }, []);
 
   const applyStylePreset = useCallback((preset: PresetKey) => {
     setStylePreset(preset);
@@ -155,8 +241,8 @@ const AppInner: React.FC = () => {
         format: [wmm, hmm],
       });
       // Draw OSM features as vector lines, using Web Mercator for true metric scaling
-      if (osmData && osmData.elements) {
-        const { features } = osmElementsToGeoJSON(osmData.elements);
+      if (osmData) {
+        const features = dataToFeatures(osmData);
         // Inset used only for placing the scale bar / north arrow / title
         // text away from the page edge — NOT for fitting the map content.
         // The geographic bbox was sized (in App's setPresetBbox) to match
@@ -171,7 +257,8 @@ const AppInner: React.FC = () => {
         // oversized on custom small formats.
         const pageScale = Math.min(2.2, Math.max(0.6, Math.sqrt((pageW * pageH) / (210 * 297))));
         const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, features, selectedTypes, pageW, pageH);
-        const { water = [], streets = [], buildings = [], railways = [], trees = [], greenery = [] } = categories;
+        const { water = [], streets = [], buildings = [], railways = [], trees = [], greenery = [], contours = [] } = categories;
+        const projectLine = (coords: [number, number][]) => simplifyPts(coords.map(project), SIMPLIFY_TOL_MM);
 
         // Draw each category using its configured style (color, line width,
         // fill, dash pattern — from the selected preset or custom edits).
@@ -195,7 +282,7 @@ const AppInner: React.FC = () => {
             const polygons = areaPolygons(f);
             if (polygons) {
               polygons.forEach(rings => {
-                const projectedRings = rings.map(r => r.map(project)).filter(r => r.length > 2);
+                const projectedRings = rings.map(projectLine).filter(r => r.length > 2);
                 if (projectedRings.length === 0) return;
                 if (fill) {
                   // All rings in one path + even-odd fill, so inner rings
@@ -211,10 +298,13 @@ const AppInner: React.FC = () => {
                 });
               });
             } else if (f.geometry.type === 'LineString') {
-              const projected = (f.geometry.coordinates as [number, number][]).map(project);
+              const projected = projectLine(f.geometry.coordinates as [number, number][]);
               if (projected.length > 1) {
+                // index contours (every 5th) drawn heavier
+                if (f.properties?.contour && f.properties.index) doc.setLineWidth(lineWidth * 2.2);
                 tracePts(projected, false);
                 doc.stroke();
+                if (f.properties?.contour && f.properties.index) doc.setLineWidth(lineWidth);
               }
             }
           });
@@ -238,11 +328,13 @@ const AppInner: React.FC = () => {
         // (fill) below everything, then water, railways, streets,
         // buildings, trees on top.
         drawCategory(greenery, layerStyles.greenery);
+        drawCategory(contours, layerStyles.contours);
         drawCategory(water, layerStyles.water);
         drawCategory(railways, layerStyles.railways);
         drawCategory(streets, layerStyles.streets);
         drawCategory(buildings, layerStyles.buildings);
         drawTrees(trees, layerStyles.trees);
+
 
         // --- Draw scale bar ---
         // Choose a nice round scale bar length (in true ground meters, not
@@ -295,20 +387,25 @@ const AppInner: React.FC = () => {
   const handleExportSVG = (options: ExportOptions) => {
     try {
       setExportError(null);
-      if (!osmData || !osmData.elements) return;
+      if (!osmData) return;
       const [wmm, hmm] = getPaperDimsMm(options);
-      const { features } = osmElementsToGeoJSON(osmData.elements);
-      const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, features, selectedTypes, wmm, hmm);
+      const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, dataToFeatures(osmData), selectedTypes, wmm, hmm);
       const svg = buildExportSvg({ wmm, hmm, categories, project, layerStyles, trueWidthMeters, exportOptions: options, background: PRESET_BACKGROUNDS[stylePreset] });
-      const blob = new Blob([svg], { type: 'image/svg+xml' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'siteplan-export.svg';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(svg, 'image/svg+xml', 'siteplan-export.svg');
+    } catch (err) {
+      setExportError(t('errorExportFailed'));
+    }
+  };
+
+  // DXF for CAD: real-world meters in UTM, one CAD layer per category.
+  const handleExportDXF = (options: ExportOptions) => {
+    try {
+      setExportError(null);
+      if (!osmData) return;
+      const [wmm, hmm] = getPaperDimsMm(options);
+      const { categories } = prepareExportGeometry(bbox, dataToFeatures(osmData), selectedTypes, wmm, hmm);
+      const dxf = buildExportDxf({ bbox, categories, layerStyles, scale: options.scale });
+      downloadBlob(dxf, 'application/dxf', 'siteplan-export.dxf');
     } catch (err) {
       setExportError(t('errorExportFailed'));
     }
@@ -326,6 +423,7 @@ const AppInner: React.FC = () => {
           onBboxChange={setBbox}
           osmData={osmData}
           selectedTypes={selectedTypes}
+          layerStyles={layerStyles}
           scale={exportOptions.scale}
           onResizeCommit={handleResizeCommit}
         />
@@ -345,11 +443,16 @@ const AppInner: React.FC = () => {
         setExportOptions={setExportOptions}
         handleExport={handleExport}
         handleExportSVG={handleExportSVG}
+        handleExportDXF={handleExportDXF}
         onFetch={() => setFetchRequested(true)}
         stylePreset={stylePreset}
         onStylePresetChange={applyStylePreset}
         layerStyles={layerStyles}
         onLayerStyleChange={updateLayerStyle}
+        onPlaceSelect={goTo}
+        contourInterval={contourInterval}
+        onContourIntervalChange={setContourInterval}
+        usedContourInterval={osmData?.contours[0]?.properties?.interval ?? null}
       />
 
       <div className="qsp-toolbar">
@@ -374,6 +477,9 @@ const AppInner: React.FC = () => {
         >
           <CenterIcon size={18} />
           {t('centerHereButton')}
+        </button>
+        <button type="button" className="qsp-toolbar-btn" onClick={copyLink} title={t('copyLinkHint')}>
+          {linkCopied ? t('linkCopied') : t('copyLinkButton')}
         </button>
       </div>
     </div>

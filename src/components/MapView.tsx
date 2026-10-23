@@ -9,14 +9,17 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { OSMFeatureType } from './DataSelector';
 import { findNearestDin, findNearestDinDimension, PAPER_SIZES, DIN_DIMENSIONS } from '../utils/paperSizes';
-import { osmElementsToGeoJSON } from '../utils/osmToGeoJSON';
+import { MapData, dataToFeatures } from '../utils/mapData';
+import { categorizeFeatures, areaPolygons } from '../utils/exportGeometry';
+import { LayerStyle, StyleMap } from '../utils/exportStyles';
 
 interface MapViewProps {
   styleUrl: string;
   bbox: [number, number, number, number];
   onBboxChange: (bbox: [number, number, number, number]) => void;
-  osmData?: any;
+  osmData?: MapData | null;
   selectedTypes?: OSMFeatureType[];
+  layerStyles: StyleMap;
   scale: number;
   onResizeCommit: (patch: { paperSize: string; orientation: 'portrait' | 'landscape'; customWidthMm?: number; customHeightMm?: number }) => void;
 }
@@ -64,11 +67,63 @@ function edgeLngLat(bbox: [number, number, number, number], edge: Edge): [number
 }
 
 
+// Preview layers, bottom to top (same order as the exports).
+const PREVIEW_SOURCES = [
+  'osm-greenery', 'osm-greenery-areas', 'osm-contours', 'osm-water', 'osm-water-areas', 'osm-railways',
+  'osm-streets', 'osm-buildings', 'osm-buildings-areas', 'osm-trees',
+];
+const PREVIEW_LAYERS: { id: string; kind: 'fill' | 'line' | 'circle'; source: string; type: OSMFeatureType }[] = [
+  { id: 'osm-greenery-fill', kind: 'fill', source: 'osm-greenery-areas', type: 'greenery' },
+  { id: 'osm-greenery', kind: 'line', source: 'osm-greenery', type: 'greenery' },
+  { id: 'osm-contours', kind: 'line', source: 'osm-contours', type: 'contours' },
+  { id: 'osm-water-fill', kind: 'fill', source: 'osm-water-areas', type: 'water' },
+  { id: 'osm-water', kind: 'line', source: 'osm-water', type: 'water' },
+  { id: 'osm-railways', kind: 'line', source: 'osm-railways', type: 'railways' },
+  { id: 'osm-streets', kind: 'line', source: 'osm-streets', type: 'streets' },
+  { id: 'osm-buildings-fill', kind: 'fill', source: 'osm-buildings-areas', type: 'buildings' },
+  { id: 'osm-buildings', kind: 'line', source: 'osm-buildings', type: 'buildings' },
+  { id: 'osm-trees', kind: 'circle', source: 'osm-trees', type: 'trees' },
+];
+
+const hex = ([r, g, b]: [number, number, number]) => `rgb(${r},${g},${b})`;
+
+// A real-world size (m) as screen pixels at each zoom level, never thinner
+// than minPx so hairlines stay visible. MapLibre zoom uses 512 px tiles.
+function metersToPx(meters: number, lat: number, minPx: number): any {
+  const base = meters / (78271.517 * Math.cos((lat * Math.PI) / 180));
+  const stops: number[] = [];
+  for (let z = 0; z <= 24; z += 2) stops.push(z, Math.max(minPx, base * 2 ** z));
+  return ['interpolate', ['exponential', 2], ['zoom'], ...stops];
+}
+
+function applyPreviewPaint(map: maplibregl.Map, styles: StyleMap, scale: number, lat: number) {
+  const mmToM = (mm: number) => (mm / 1000) * scale;
+  PREVIEW_LAYERS.forEach(({ id, kind, type }) => {
+    if (!map.getLayer(id)) return;
+    const s: LayerStyle = styles[type];
+    const color = hex(s.color);
+    if (kind === 'fill') {
+      map.setPaintProperty(id, 'fill-color', hex(s.fillColor ?? s.color));
+      map.setPaintProperty(id, 'fill-opacity', s.fill ? Math.max(s.fillOpacity, s.texture ? 0.35 : 0) : 0);
+    } else if (kind === 'line') {
+      map.setPaintProperty(id, 'line-color', color);
+      map.setPaintProperty(id, 'line-width', metersToPx(mmToM(Math.max(s.lineWidth, 0.05)), lat, s.lineWidth > 0 ? 0.6 : 0));
+      map.setPaintProperty(id, 'line-opacity', s.lineWidth > 0 ? 1 : 0);
+      map.setPaintProperty(id, 'line-dasharray', s.dash && s.lineWidth > 0 ? [s.dash[0] / s.lineWidth, s.dash[1] / s.lineWidth] : [1, 0]);
+    } else {
+      const rMeters = type === 'trees' && s.canopy ? 3 : mmToM(s.pointRadius ?? 0.8);
+      map.setPaintProperty(id, 'circle-color', hex(type === 'trees' && s.canopy ? (s.fillColor ?? s.color) : s.color));
+      map.setPaintProperty(id, 'circle-radius', metersToPx(rMeters, lat, 1.5));
+    }
+  });
+}
+
 const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
-  ({ styleUrl, bbox, onBboxChange, osmData, selectedTypes = ['water', 'streets', 'buildings', 'trees', 'greenery'], scale, onResizeCommit }, ref) => {
+  ({ styleUrl, bbox, onBboxChange, osmData, selectedTypes = ['water', 'streets', 'buildings', 'trees', 'greenery'], layerStyles, scale, onResizeCommit }, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const [mapInitialized, setMapInitialized] = useState(false);
+    const [styleReady, setStyleReady] = useState(false);
 
     // Latest values for the drag handlers below, which are bound once and
     // would otherwise close over stale props/state.
@@ -138,6 +193,10 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
         bounds: initialBboxRef.current,
         fitBoundsOptions: { padding: 20 },
       });
+      // 'load' fires once the base style is usable. isStyleLoaded() is
+      // stricter (false while any tile or image is still pending, which can
+      // last a long time), so it's no gate for adding the data layers.
+      mapRef.current.once('load', () => setStyleReady(true));
       setMapInitialized(true);
     }
     return () => {
@@ -564,121 +623,43 @@ const MapView = forwardRef<maplibregl.Map | undefined, MapViewProps>(
     };
   }, [mapInitialized]);
 
-  // Add/update OSM data as GeoJSON source/layer after style is loaded
+  // OSM data on the map, styled like the export: same colors, fills and
+  // line widths (true to the export scale, so the preview shows how heavy
+  // lines will print). Sources are rebuilt only when the data changes;
+  // style edits just update paint properties.
+  const stylesRef = useRef({ layerStyles, scale, lat: (bbox[1] + bbox[3]) / 2 });
+  stylesRef.current = { layerStyles, scale, lat: (bbox[1] + bbox[3]) / 2 };
+
   useEffect(() => {
-    if (!mapRef.current) return;
     const map = mapRef.current;
-    let cancelled = false;
-    function updateLayers() {
-      if (!map || cancelled || !map.isStyleLoaded()) return;
-      // Remove previous layers first, then sources
-      const layerIds = [
-        'osm-greenery-fill',
-        'osm-greenery',
-        'osm-water',
-        'osm-streets',
-        'osm-buildings',
-        'osm-railways',
-        'osm-trees',
-      ];
-      const sourceIds = [
-        'osm-water',
-        'osm-streets',
-        'osm-buildings',
-        'osm-railways',
-        'osm-trees',
-        'osm-greenery',
-      ];
-      
-      // Remove layers first
-      layerIds.forEach(id => {
-        if (map.getLayer(id)) {
-          map.removeLayer(id);
-        }
-      });
-      
-      // Then remove sources
-      sourceIds.forEach(id => {
-        if (map.getSource(id)) {
-          map.removeSource(id);
-        }
-      });
-      if (osmData && osmData.elements) {
-        // Split features by type
-        const geojson = osmElementsToGeoJSON(osmData.elements);
-        // Only show selected types
-        const water = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('water') ? geojson.features.filter(f => f.properties && (f.properties.waterway || f.properties.natural === 'water')) : [] };
-        const streets = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('streets') ? geojson.features.filter(f => f.properties && (f.properties.highway)) : [] };
-        const buildings = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('buildings') ? geojson.features.filter(f => f.properties && (f.properties.building)) : [] };
-        const railways = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('railways') ? geojson.features.filter(f => f.properties && (f.properties.railway === 'rail')) : [] };
-        const trees = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('trees') ? geojson.features.filter(f => f.properties && (f.properties.natural === 'tree')) : [] };
-        const greenery = { type: 'FeatureCollection' as const, features: selectedTypes && selectedTypes.includes('greenery') ? geojson.features.filter(f => f.properties && (f.properties.landuse === 'forest' || f.properties.landuse === 'grass' || f.properties.landuse === 'meadow' || f.properties.landuse === 'orchard' || f.properties.landuse === 'vineyard' || f.properties.landuse === 'farmland' || f.properties.landuse === 'allotments' || f.properties.leisure === 'park' || f.properties.leisure === 'garden' || f.properties.leisure === 'nature_reserve' || f.properties.natural === 'wood' || f.properties.natural === 'scrub' || f.properties.natural === 'grassland' || f.properties.natural === 'heath')) : [] };
+    if (!map || !styleReady) return;
+    PREVIEW_LAYERS.forEach(l => { if (map.getLayer(l.id)) map.removeLayer(l.id); });
+    PREVIEW_SOURCES.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+    if (!osmData) return;
 
-        // Add sources
-        map.addSource('osm-water', { type: 'geojson', data: water });
-        map.addSource('osm-streets', { type: 'geojson', data: streets });
-        map.addSource('osm-buildings', { type: 'geojson', data: buildings });
-        map.addSource('osm-railways', { type: 'geojson', data: railways });
-        map.addSource('osm-trees', { type: 'geojson', data: trees });
-        map.addSource('osm-greenery', { type: 'geojson', data: greenery });
+    const categories = categorizeFeatures(dataToFeatures(osmData), selectedTypes);
+    const collection = (features: GeoJSON.Feature[]) => ({ type: 'FeatureCollection' as const, features });
+    // Areas as real polygons (closed ways arrive as LineStrings), for fills
+    const asAreas = (features: GeoJSON.Feature[] = []) => collection(features.flatMap(f => {
+      const polygons = areaPolygons(f);
+      return polygons ? [{ type: 'Feature' as const, properties: f.properties, geometry: { type: 'MultiPolygon' as const, coordinates: polygons } }] : [];
+    }));
+    PREVIEW_SOURCES.forEach(id => {
+      const type = id.replace('osm-', '').replace('-areas', '') as OSMFeatureType;
+      map.addSource(id, { type: 'geojson', data: id.endsWith('-areas') ? asAreas(categories[type]) : collection(categories[type] ?? []) });
+    });
+    // below the export frame and its handles, so those stay on top
+    const beforeId = map.getLayer('bbox-fill') ? 'bbox-fill' : undefined;
+    PREVIEW_LAYERS.forEach(l => map.addLayer({ id: l.id, type: l.kind, source: l.source } as maplibregl.LayerSpecification, beforeId));
+    applyPreviewPaint(map, stylesRef.current.layerStyles, stylesRef.current.scale, stylesRef.current.lat);
+  }, [osmData, selectedTypes, styleReady]);
 
-        // Add layers with different colors, in correct order (greenery fill below everything, water, then railways, streets, buildings, trees on top)
-        map.addLayer({
-          id: 'osm-greenery-fill',
-          type: 'fill',
-          source: 'osm-greenery',
-          paint: { 'fill-color': '#90EE90', 'fill-opacity': 0.4 },
-        });
-        map.addLayer({
-          id: 'osm-greenery',
-          type: 'line',
-          source: 'osm-greenery',
-          paint: { 'line-color': '#228B22', 'line-width': 1.5 },
-        });
-        map.addLayer({
-          id: 'osm-water',
-          type: 'line',
-          source: 'osm-water',
-          paint: { 'line-color': '#3399ff', 'line-width': 2 },
-        });
-        map.addLayer({
-          id: 'osm-railways',
-          type: 'line',
-          source: 'osm-railways',
-          paint: { 'line-color': '#444', 'line-width': 2, 'line-dasharray': [2,2] },
-        });
-        map.addLayer({
-          id: 'osm-streets',
-          type: 'line',
-          source: 'osm-streets',
-          paint: { 'line-color': '#ff6600', 'line-width': 2 },
-        });
-        map.addLayer({
-          id: 'osm-buildings',
-          type: 'line',
-          source: 'osm-buildings',
-          paint: { 'line-color': '#888888', 'line-width': 2 },
-        });
-        map.addLayer({
-          id: 'osm-trees',
-          type: 'circle',
-          source: 'osm-trees',
-          paint: { 
-            'circle-radius': 4, 
-            'circle-color': '#228B22', 
-            'circle-stroke-width': 1,
-            'circle-stroke-color': '#fff'
-          },
-        });
-      }
-    }
-    if (map.isStyleLoaded && map.isStyleLoaded()) {
-      updateLayers();
-    } else {
-      map.once('styledata', updateLayers);
-    }
-    return () => { cancelled = true; };
-  }, [osmData, selectedTypes]);
+  const latKey = Math.round(((bbox[1] + bbox[3]) / 2) * 10) / 10;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer('osm-streets')) return;
+    applyPreviewPaint(map, layerStyles, scale, latKey);
+  }, [layerStyles, scale, latKey]);
 
   // Removed auto-fitBounds on every bbox change to fix zoom issue
 

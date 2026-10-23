@@ -13,11 +13,23 @@ export interface Dictionary {
   layerRailways: string;
   layerTrees: string;
   layerGreenery: string;
+  layerContours: string;
+  contourIntervalLabel: string;
+  contourIntervalAuto: string;
+  contourIntervalUsed: string;
+  contourSourceHint: string;
   layersSelected: string;
 
   fetchButton: string;
   fetchButtonLoading: string;
   centerHereButton: string;
+  copyLinkButton: string;
+  copyLinkHint: string;
+  linkCopied: string;
+  searchPlaceholder: string;
+  searchButton: string;
+  searchNoResults: string;
+  searchFailed: string;
 
   scaleLabel: string;
   paperSizeLabel: string;
@@ -32,6 +44,8 @@ export interface Dictionary {
   exportButton: string;
   exportSvgButton: string;
   exportSvgHint: string;
+  exportDxfButton: string;
+  exportDxfHint: string;
   exportHintNoData: string;
 
   styleTitle: string;
@@ -75,11 +89,23 @@ export const dictionaries: Record<Lang, Dictionary> = {
     layerRailways: 'Railways',
     layerTrees: 'Trees (Points)',
     layerGreenery: 'Green Areas',
+    layerContours: 'Contour Lines',
+    contourIntervalLabel: 'Contour interval (m)',
+    contourIntervalAuto: 'Auto (from scale and terrain)',
+    contourIntervalUsed: 'Current: {m} m',
+    contourSourceHint: 'Elevation: AWS Terrain Tiles (SRTM/EU-DEM, ~30 m source grid).',
     layersSelected: '{count} / {total} layers selected',
 
     fetchButton: 'Fetch Data',
     fetchButtonLoading: 'Fetching…',
     centerHereButton: 'Center Here',
+    copyLinkButton: 'Copy Link',
+    copyLinkHint: 'Copy a link to this exact area, scale, paper size, style and layers',
+    linkCopied: 'Link copied',
+    searchPlaceholder: 'Search address or place…',
+    searchButton: 'Go',
+    searchNoResults: 'No places found.',
+    searchFailed: 'Search failed — try again in a moment.',
 
     scaleLabel: 'Scale (1:{scale})',
     paperSizeLabel: 'Paper Size',
@@ -93,6 +119,8 @@ export const dictionaries: Record<Lang, Dictionary> = {
     exportAreaHint: 'Export area: {area} km²',
     exportButton: 'Export as PDF',
     exportSvgButton: 'Export as SVG',
+    exportDxfButton: 'Export as DXF (CAD)',
+    exportDxfHint: 'For AutoCAD, Archicad, Vectorworks, Rhino: real-world meters in UTM coordinates, one CAD layer per category.',
     exportSvgHint: 'Each layer (water, streets, buildings, ...) as a separate named group — ideal for Illustrator/Inkscape.',
     exportHintNoData: 'Fetch OSM data first to enable export.',
 
@@ -135,11 +163,23 @@ export const dictionaries: Record<Lang, Dictionary> = {
     layerRailways: 'Bahnlinien',
     layerTrees: 'Bäume (Punkte)',
     layerGreenery: 'Grünflächen',
+    layerContours: 'Höhenlinien',
+    contourIntervalLabel: 'Höhenlinien-Abstand (m)',
+    contourIntervalAuto: 'Auto (aus Maßstab und Gelände)',
+    contourIntervalUsed: 'Aktuell: {m} m',
+    contourSourceHint: 'Höhendaten: AWS Terrain Tiles (SRTM/EU-DEM, ~30 m Quellraster).',
     layersSelected: '{count} / {total} Ebenen ausgewählt',
 
     fetchButton: 'Daten abrufen',
     fetchButtonLoading: 'Lädt…',
     centerHereButton: 'Hier zentrieren',
+    copyLinkButton: 'Link kopieren',
+    copyLinkHint: 'Link zu genau diesem Ausschnitt, Maßstab, Format, Stil und diesen Ebenen kopieren',
+    linkCopied: 'Link kopiert',
+    searchPlaceholder: 'Adresse oder Ort suchen…',
+    searchButton: 'Los',
+    searchNoResults: 'Keine Orte gefunden.',
+    searchFailed: 'Suche fehlgeschlagen — bitte gleich noch einmal versuchen.',
 
     scaleLabel: 'Maßstab (1:{scale})',
     paperSizeLabel: 'Papierformat',
@@ -153,6 +193,8 @@ export const dictionaries: Record<Lang, Dictionary> = {
     exportAreaHint: 'Exportfläche: {area} km²',
     exportButton: 'Als PDF exportieren',
     exportSvgButton: 'Als SVG exportieren',
+    exportDxfButton: 'Als DXF exportieren (CAD)',
+    exportDxfHint: 'Für AutoCAD, Archicad, Vectorworks, Rhino: echte Meter in UTM-Koordinaten, eine CAD-Ebene pro Kategorie.',
     exportSvgHint: 'Jede Ebene (Gewässer, Straßen, Gebäude, ...) als eigene benannte Gruppe — ideal für Illustrator/Inkscape.',
     exportHintNoData: 'Zuerst OSM-Daten abrufen, um den Export freizuschalten.',
 
