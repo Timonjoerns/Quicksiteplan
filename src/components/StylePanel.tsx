@@ -12,13 +12,14 @@ interface StylePanelProps {
   onLayerStyleChange: (type: OSMFeatureType, patch: Partial<LayerStyle>) => void;
 }
 
-const PRESET_LABEL_KEYS: Record<PresetKey, 'presetDefault' | 'presetBlueprint' | 'presetGrayscale' | 'presetBold' | 'presetSketch' | 'presetAerial'> = {
+const PRESET_LABEL_KEYS: Record<PresetKey, 'presetDefault' | 'presetBlueprint' | 'presetGrayscale' | 'presetBold' | 'presetSketch' | 'presetAerial' | 'presetVibrant'> = {
   default: 'presetDefault',
   blueprint: 'presetBlueprint',
   grayscale: 'presetGrayscale',
   bold: 'presetBold',
   sketch: 'presetSketch',
   aerial: 'presetAerial',
+  vibrant: 'presetVibrant',
 };
 
 function rgbToHex([r, g, b]: [number, number, number]): string {

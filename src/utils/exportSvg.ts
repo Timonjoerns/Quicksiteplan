@@ -33,6 +33,9 @@ const STREET_WIDTH_FACTOR: Record<string, number> = {
   service: 0.65, track: 0.5, footway: 0.35, path: 0.3, cycleway: 0.35, bridleway: 0.3, steps: 0.35,
 };
 
+// Typical waterway widths (m) when the OSM way has no width tag.
+const WATERWAY_WIDTH_M: Record<string, number> = { river: 20, canal: 12, stream: 3 };
+
 type Pt = [number, number];
 
 // Geometry now extends past the page edge (instead of being cut off point
@@ -161,6 +164,12 @@ function texturePattern(name: string, style: LayerStyle): string {
   const ink = rgb(style.color);
   const tint = rgb(style.fillColor ?? style.color);
   const bg = style.fill ? `<rect width="100%" height="100%" fill="${tint}" fill-opacity="${style.fillOpacity}"/>` : '';
+  if (style.texture === 'lines') {
+    // fine vertical lines, as in colored masterplan diagrams
+    const s = 0.6;
+    return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${s}" height="${s}">` +
+      `${bg}<line x1="0" y1="0" x2="0" y2="${s}" stroke="${ink}" stroke-width="0.08"/></pattern>`;
+  }
   if (style.texture === 'hatch') {
     const s = 1.2;
     return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${s}" height="${s}" patternTransform="rotate(45)">` +
@@ -276,7 +285,14 @@ export function buildExportSvg(params: BuildSvgParams): string {
         }
       } else if (f.geometry.type === 'LineString') {
         const d = pathFromPts(projectPts(f.geometry.coordinates as Pt[], project), false);
-        if (d) paths.push(`<path d="${d}" fill="none"/>`);
+        if (!d) return;
+        if (style.scaledLines && mmPerMeter > 0) {
+          const widthM = parseMeters(f.properties?.width) ?? WATERWAY_WIDTH_M[String(f.properties?.waterway)] ?? 0;
+          const w = Math.max(style.lineWidth, Math.min(widthM, 80) * mmPerMeter);
+          paths.push(`<path d="${d}" fill="none" stroke-width="${fmt(w)}"/>`);
+        } else {
+          paths.push(`<path d="${d}" fill="none"/>`);
+        }
       }
     });
     if (paths.length === 0) return;

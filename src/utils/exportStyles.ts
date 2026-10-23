@@ -12,20 +12,21 @@ export interface LayerStyle {
   // and draws the flat style above). Real-world sizes are in meters and are
   // converted to page mm using the export scale.
   fillColor?: [number, number, number]; // area fill, defaults to `color`
-  texture?: 'hatch' | 'stipple' | 'grain'; // pattern fill for areas, drawn in `color`
+  texture?: 'hatch' | 'stipple' | 'grain' | 'lines'; // pattern fill for areas, drawn in `color`
   shadow?: boolean; // cast drop shadow (buildings, trees)
   casingMeters?: number; // streets: draw as double-line road of this width
+  scaledLines?: boolean; // water: stroke rivers/canals/streams at real-world width
   canopy?: 'scribble' | 'soft'; // trees: canopy symbol (outlined with trunk strokes, or a plain textured blob) instead of a dot
 }
 
 export type StyleMap = Record<OSMFeatureType, LayerStyle>;
 
-export type PresetKey = 'default' | 'blueprint' | 'grayscale' | 'bold' | 'sketch' | 'aerial';
+export type PresetKey = 'default' | 'blueprint' | 'grayscale' | 'bold' | 'sketch' | 'aerial' | 'vibrant';
 
-export const STYLE_PRESET_KEYS: PresetKey[] = ['default', 'blueprint', 'grayscale', 'bold', 'sketch', 'aerial'];
+export const STYLE_PRESET_KEYS: PresetKey[] = ['default', 'blueprint', 'grayscale', 'bold', 'sketch', 'aerial', 'vibrant'];
 
 // Presets whose look relies on the SVG-only extras above.
-export const SVG_ONLY_PRESETS: PresetKey[] = ['sketch', 'aerial'];
+export const SVG_ONLY_PRESETS: PresetKey[] = ['sketch', 'aerial', 'vibrant'];
 
 // Optional textured page background (SVG only), drawn under every layer.
 // Uses LayerStyle's fill fields: fillColor = base tone, color = texture ink.
@@ -102,6 +103,18 @@ export const STYLE_PRESETS: Record<PresetKey, StyleMap> = {
     railways: { color: [80, 80, 80], lineWidth: 0.3, fill: false, fillOpacity: 1, dash: [1.5, 1] },
     trees: { color: [25, 25, 25], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [95, 95, 95], pointRadius: 0.8, shadow: true, canopy: 'soft', texture: 'grain' },
     greenery: { color: [45, 45, 45], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [160, 160, 160], texture: 'grain' },
+  },
+
+  // Vibrant urban-masterplan diagram: saturated blue water with rivers at
+  // real width, coral buildings without outlines, pale mint green areas
+  // with fine line hatching, light gray streets, dashed purple rail.
+  vibrant: {
+    water: { color: [0, 102, 255], lineWidth: 0.2, fill: true, fillOpacity: 1, scaledLines: true },
+    streets: { color: [196, 196, 202], lineWidth: 0.12, fill: false, fillOpacity: 1 },
+    buildings: { color: [242, 140, 135], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [244, 150, 144] },
+    railways: { color: [140, 60, 230], lineWidth: 0.35, fill: false, fillOpacity: 1, dash: [1.2, 0.8] },
+    trees: { color: [120, 205, 175], lineWidth: 0.1, fill: true, fillOpacity: 1, pointRadius: 0.45 },
+    greenery: { color: [130, 205, 185], lineWidth: 0, fill: true, fillOpacity: 1, fillColor: [222, 243, 236], texture: 'lines' },
   },
 };
 
