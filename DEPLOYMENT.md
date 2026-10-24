@@ -119,4 +119,4 @@ These are intentional architectural decisions and don't affect functionality.
 
 ## 🎉 Success!
 
-Your Quicksiteplan project is now live with comprehensive tree and green area support! The app now provides a complete site planning solution with all major OSM feature types.
+Your Kontext project is now live with comprehensive tree and green area support! The app now provides a complete site planning solution with all major OSM feature types.

@@ -128,7 +128,7 @@ export function buildExportDxf(params: BuildDxfParams): string {
     polyline(FRAME_LAYER, corners, true);
     const [fx, fy] = toUtm([minLon, minLat]);
     // Notes below the frame: coordinate system, then credits + disclaimer
-    const notes = [`Quicksiteplan · ${label} · 1:${scale}`, ...exportCredits((categories.contours ?? []).length > 0)];
+    const notes = [`Kontext · ${label} · 1:${scale}`, ...exportCredits((categories.contours ?? []).length > 0)];
     notes.forEach((note, i) => {
       g(0, 'TEXT'); g(8, FRAME_LAYER); g(10, fx); g(20, fy - (4 + i * 3.5) * metersPerMm); g(30, 0); g(40, 2.5 * metersPerMm);
       g(1, dxfText(note));

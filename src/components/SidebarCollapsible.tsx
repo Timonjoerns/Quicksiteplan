@@ -54,7 +54,7 @@ const SidebarCollapsible: React.FC<SidebarCollapsibleProps> = ({
     <div className="qsp-sidebar">
       <div className="qsp-sidebar__header">
         <div className="qsp-sidebar__header-row">
-          <h1 className="qsp-brand">Quicksiteplan<sup>.pdf</sup></h1>
+          <h1 className="qsp-brand">Kontext</h1>
           <div className="qsp-lang-switch" role="group" aria-label={t('languageLabel')}>
             <button type="button" className={`qsp-lang-btn${lang === 'en' ? ' qsp-lang-btn--active' : ''}`} onClick={() => setLang('en')}>EN</button>
             <button type="button" className={`qsp-lang-btn${lang === 'de' ? ' qsp-lang-btn--active' : ''}`} onClick={() => setLang('de')}>DE</button>

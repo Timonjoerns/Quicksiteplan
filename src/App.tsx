@@ -390,7 +390,7 @@ const AppInner: React.FC = () => {
           doc.text(line, inset, pageH - inset - (creditLines.length - 1 - i) * creditPt * 0.3528 * 1.35);
         });
       }
-      doc.save('siteplan-export.pdf');
+      doc.save('kontext-export.pdf');
     } catch (err) {
       setExportError(t('errorExportFailed'));
     }
@@ -409,7 +409,7 @@ const AppInner: React.FC = () => {
       const [wmm, hmm] = getPaperDimsMm(options);
       const { project, categories, trueWidthMeters } = prepareExportGeometry(bbox, dataToFeatures(osmData), selectedTypes, wmm, hmm);
       const svg = buildExportSvg({ wmm, hmm, categories, project, layerStyles, trueWidthMeters, exportOptions: options, background: PRESET_BACKGROUNDS[stylePreset] });
-      downloadBlob(svg, 'image/svg+xml', 'siteplan-export.svg');
+      downloadBlob(svg, 'image/svg+xml', 'kontext-export.svg');
     } catch (err) {
       setExportError(t('errorExportFailed'));
     }
@@ -423,7 +423,7 @@ const AppInner: React.FC = () => {
       const [wmm, hmm] = getPaperDimsMm(options);
       const { categories } = prepareExportGeometry(bbox, dataToFeatures(osmData), selectedTypes, wmm, hmm);
       const dxf = buildExportDxf({ bbox, categories, layerStyles, scale: options.scale });
-      downloadBlob(dxf, 'application/dxf', 'siteplan-export.dxf');
+      downloadBlob(dxf, 'application/dxf', 'kontext-export.dxf');
     } catch (err) {
       setExportError(t('errorExportFailed'));
     }

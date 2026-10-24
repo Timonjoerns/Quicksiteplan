@@ -1,6 +1,6 @@
 {
-  "short_name": "Quicksiteplan",
-  "name": "Quicksiteplan — OSM site plan export",
+  "short_name": "Kontext",
+  "name": "Kontext — scaled site and context plans from OpenStreetMap",
   "icons": [
     {
       "src": "favicon.ico",

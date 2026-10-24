@@ -37,7 +37,7 @@ const Imprint: React.FC = () => (
     <p>{LEGAL_CONTACT.name}, Anschrift wie oben.</p>
     <h3>Haftung für Inhalte und Daten</h3>
     <p>
-      Quicksiteplan ist ein kostenloses Werkzeug. Die erzeugten Pläne beruhen auf OpenStreetMap-Daten
+      Kontext ist ein kostenloses Werkzeug. Die erzeugten Pläne beruhen auf OpenStreetMap-Daten
       und frei verfügbaren Höhendaten. Sie sind keine amtlichen Vermessungsunterlagen; für Richtigkeit,
       Vollständigkeit und Aktualität wird keine Gewähr übernommen. Für Bauanträge ist in der Regel ein
       amtlicher Lageplan einer Vermessungsstelle erforderlich.
