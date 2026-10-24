@@ -5,7 +5,7 @@
 **Date**: October 6, 2025  
 **Commit**: `5866694` - feat: Add trees and green areas support  
 **Branch**: master  
-**Live URL**: https://timonjoerns.github.io/Quicksiteplan/
+**Live URL**: https://timonjoerns.github.io/Kontext/
 
 ---
 
@@ -69,7 +69,7 @@ Before going live, verify:
 - [x] Git changes committed
 - [x] Pushed to GitHub (master branch)
 - [x] Deployed to GitHub Pages (gh-pages branch)
-- [ ] Test live site at https://timonjoerns.github.io/Quicksiteplan/
+- [ ] Test live site at https://timonjoerns.github.io/Kontext/
 - [ ] Verify trees render correctly
 - [ ] Verify green areas render correctly
 - [ ] Test PDF export with new features
@@ -79,9 +79,9 @@ Before going live, verify:
 
 ## 🔗 Quick Links
 
-- **Live Site**: https://timonjoerns.github.io/Quicksiteplan/
-- **GitHub Repo**: https://github.com/Timonjoerns/Quicksiteplan
-- **Latest Commit**: https://github.com/Timonjoerns/Quicksiteplan/commit/5866694
+- **Live Site**: https://timonjoerns.github.io/Kontext/
+- **GitHub Repo**: https://github.com/Timonjoerns/Kontext
+- **Latest Commit**: https://github.com/Timonjoerns/Kontext/commit/5866694
 
 ---
 
